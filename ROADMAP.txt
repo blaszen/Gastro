@@ -1,0 +1,8 @@
+A) Set up Firebase Auth UI (login/register screens)
+B) Build the Chat UI (similar to iMessage/ChatGPT)
+C) Integrate an LLM API (OpenAI, Groq, Anthropic, etc.)
+D) Add Voice Input + TTS flow
+E) Add chat categories + saved chat history
+F) Generate your GitHub-ready folder structure + README
+
+Pick A, B, C, D, E, or F, and we continue.
