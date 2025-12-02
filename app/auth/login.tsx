@@ -43,7 +43,7 @@ export default function Login() {
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.push("/auth/register")}>
-        <Text style={{ marginTop: 20 }}>Create an account</Text>
+        <Text style={{ marginTop: 20,color:'white' }}>Create an account</Text>
       </TouchableOpacity>
     </View>
   );
@@ -55,6 +55,7 @@ const styles = {
     padding: 12,
     marginVertical: 8,
     borderRadius: 8,
+    color:'white'
   },
   btn: {
     backgroundColor: "#0e7afe",

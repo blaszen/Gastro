@@ -43,7 +43,7 @@ export default function Register() {
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.back()}>
-        <Text style={{ marginTop: 20 }}>Back to login</Text>
+        <Text style={{ marginTop: 20,color:'white'}}>Back to login</Text>
       </TouchableOpacity>
     </View>
   );
@@ -55,6 +55,7 @@ const styles = {
     padding: 12,
     marginVertical: 8,
     borderRadius: 8,
+    color:'white'
   },
   btn: {
     backgroundColor: "#0e7afe",

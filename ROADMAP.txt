@@ -1,8 +1,111 @@
-A) Set up Firebase Auth UI (login/register screens)
-B) Build the Chat UI (similar to iMessage/ChatGPT)
-C) Integrate an LLM API (OpenAI, Groq, Anthropic, etc.)
-D) Add Voice Input + TTS flow
-E) Add chat categories + saved chat history
-F) Generate your GitHub-ready folder structure + README
+1. Home / Dashboard (what you already have)
 
-Pick A, B, C, D, E, or F, and we continue.
+Trending recipes
+
+How-to cooking videos
+
+Services carousel (personal chefs, meal prep, caterers)
+
+AI recipe generator call-to-action
+
+Maybe a “featured recipe of the day” section
+
+Goal: Quick overview, inspiration, monetization opportunities.
+
+2. Recipes / Explore Tab
+
+Ingredient-based search (users input ingredients they have)
+
+Filters: Cuisine, difficulty, prep time, dietary needs
+
+AI-generated recipes (user can modify ingredients and get instant AI suggestions)
+
+Save favorite recipes
+
+Monetization: Affiliate links for ingredients/tools used in recipes
+
+Extra feature: “Surprise me” button that generates a recipe from random ingredients.
+
+3. AI Recipe Creator
+
+Dedicated AI tab
+
+Users can type in:
+
+Ingredients they have
+
+Cuisine or dish type
+
+Cooking time
+
+AI generates a recipe step-by-step
+
+Option to save/share or promote affiliate tools like kitchen gadgets, utensils, or ingredients
+
+Maybe a premium feature: AI generates meal plans for the week
+
+Goal: Position your app as a smart assistant for aspiring chefs.
+
+4. Videos / Tutorials
+
+Curated cooking videos from YouTube or your own content
+
+Categories: Baking, Meal prep, Quick meals, Advanced techniques
+
+Monetization:
+
+Affiliate links in video descriptions
+
+Sponsored content
+
+In-app purchases for exclusive tutorials
+
+Could include shorts/reels style videos for quick engagement
+
+5. Services / Marketplace
+
+Personal chefs, meal prep, catering services
+
+Cooking classes (virtual or in-person)
+
+Kitchen tool subscriptions
+
+Monetization:
+
+Bookings (commission)
+
+Affiliate links for tools or ingredients
+
+Sponsored chef profiles
+
+6. Community / Social Tab
+
+Users can share:
+
+Their recipes
+
+Cooking photos
+
+AI-generated recipes they tried
+
+Comment, like, and follow other cooks
+
+Potential monetization:
+
+Promote courses, affiliate products in posts
+
+Featured posts for chefs / brands
+
+7. Meal Planner / Grocery List
+
+Users can plan meals for the week
+
+Auto-generate shopping lists from selected recipes
+
+AI suggestions for optimizing ingredients (reduce waste, substitute missing ingredients)
+
+Monetization:
+
+Affiliate links for grocery delivery
+
+Premium features: AI meal plan for multiple diets
