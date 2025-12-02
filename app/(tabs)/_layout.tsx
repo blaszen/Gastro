@@ -30,15 +30,39 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
  headerShown: false, // <-- hides the header
         }}
       />
       <Tabs.Screen
         name="two"
 options={{
-    title: 'Settings',
-    tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+    title: 'Search',
+    tabBarIcon: ({ color }) => <TabBarIcon name="search" color={color} />,
+    headerShown: false, // <-- hides the header
+  }}
+      />
+            <Tabs.Screen
+        name="three"
+options={{
+    title: 'Create',
+    tabBarIcon: ({ color }) => <TabBarIcon name="pencil" color={color} />,
+    headerShown: false, // <-- hides the header
+  }}
+      />
+                  <Tabs.Screen
+        name="four"
+options={{
+    title: 'Learning',
+    tabBarIcon: ({ color }) => <TabBarIcon name="video-camera" color={color} />,
+    headerShown: false, // <-- hides the header
+  }}
+      />
+                        <Tabs.Screen
+        name="five"
+options={{
+    title: 'Community',
+    tabBarIcon: ({ color }) => <TabBarIcon name="heart" color={color} />,
     headerShown: false, // <-- hides the header
   }}
       />
