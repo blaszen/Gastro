@@ -96,6 +96,32 @@ const fetchSpoonacularCategory = async (type: string) => {
   setLoading(false);
 
 };
+//Add state to hold simple recipes:
+const [simpleRecipes, setSimpleRecipes] = useState([]);
+const [simpleOffset, setSimpleOffset] = useState(0);
+const [simpleLoading, setSimpleLoading] = useState(false);
+const simpleScrollRef = useRef<ScrollView>(null);
+//2️⃣ Create Fetch Function
+const fetchSimpleRecipes = async (newSearch = false) => {
+  setSimpleLoading(true);
+  const offset = newSearch ? 0 : simpleOffset;
+
+  const data = await searchRecipes("easy", offset); // keyword = "easy"
+
+  if (newSearch) {
+    setSimpleRecipes(data.results);
+    setSimpleOffset(10);
+  } else {
+    setSimpleRecipes((prev) => [...prev, ...data.results]);
+    setSimpleOffset(offset + 10);
+  }
+
+  setSimpleLoading(false);
+};
+useEffect(() => {
+  fetchSimpleRecipes(true);
+}, []);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 50 }}>
       
@@ -219,23 +245,38 @@ const fetchSpoonacularCategory = async (type: string) => {
       </ScrollView>
 
       {/* --- SIMPLE RECIPES --- */}
-      <Text style={styles.sectionTitle}>Simple Recipes</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingLeft: 20 }}>
-        {[1, 2, 3].map((r) => (
-          <View key={r} style={styles.recipeCard}>
-            <Image
-              source={{
-                uri: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80",
-              }}
-              style={styles.recipeImage}
-            />
-            <Text style={styles.recipeTitle}>Easy Pasta #{r}</Text>
-            <Pressable style={styles.recipeButton}>
-              <Text style={styles.recipeButtonText}>View</Text>
-            </Pressable>
-          </View>
-        ))}
-      </ScrollView>
+     <Text style={styles.sectionTitle}>Simple Recipes</Text>
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  style={{ paddingLeft: 20 }}
+  ref={simpleScrollRef}
+>
+  {simpleRecipes.map((r) => (
+    <View key={r.id} style={styles.recipeCard}>
+      <Image source={{ uri: r.image }} style={styles.recipeImage} />
+      <Text style={styles.recipeTitle} numberOfLines={2}>{r.title}</Text>
+      <Pressable
+        style={styles.recipeButton}
+        onPress={() => {
+          if (r.sourceUrl) Linking.openURL(r.sourceUrl);
+          else alert("Source URL not available");
+        }}
+      >
+        <Text style={styles.recipeButtonText}>View</Text>
+      </Pressable>
+    </View>
+  ))}
+</ScrollView>
+
+{!simpleLoading && simpleRecipes.length >= 10 && (
+  <Pressable
+    onPress={() => fetchSimpleRecipes(false)}
+    style={styles.moreButton}
+  >
+    <Text style={{ color: "#fff", fontWeight: "600" }}>See More</Text>
+  </Pressable>
+)}
     </ScrollView>
   );
 }
