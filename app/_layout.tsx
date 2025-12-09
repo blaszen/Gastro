@@ -41,27 +41,30 @@ function RootNav() {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       console.log("AUTH STATE:", u);
-      console.log("AVAILABLE ROUTES:", router);
 
       if (!u) {
         router.replace("/auth/login");
       } else {
-        router.replace("/(tabs)/two");
+        // router.replace("/(drawer)/(tabs)/index"); // 👈 send authenticated users to drawer
+        router.replace("/(drawer)");
+
       }
     });
 
     return unsub;
   }, []);
-      <Slot />
-   
-    return (
-        <GluestackUIProvider>
+  
+  return (
+    <GluestackUIProvider>
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="auth/login" />
-        <Stack.Screen name="auth/register" />
-      </Stack>
+          {/* Drawer navigation */}
+          <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
+
+          {/* Auth screens */}
+          <Stack.Screen name="auth/login" />
+          <Stack.Screen name="auth/register" />
+        </Stack>
     </ThemeProvider>
         </GluestackUIProvider>
   

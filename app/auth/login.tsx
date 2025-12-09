@@ -55,7 +55,7 @@ const styles = {
     padding: 12,
     marginVertical: 8,
     borderRadius: 8,
-    color:'white'
+    color:'black'
   },
   btn: {
     backgroundColor: "#0e7afe",

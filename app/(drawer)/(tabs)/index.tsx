@@ -10,8 +10,11 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Pressable
 } from "react-native";
-import { auth } from "../../lib/firebase";
+import { auth } from "../../../lib/firebase";
+import { DrawerActions } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -83,6 +86,7 @@ const services = [
 
 export default function TabOneScreen() {
   const [search, setSearch] = useState("");
+  const navigation = useNavigation();
 
   const onLogout = async () => {
     try {
@@ -131,15 +135,20 @@ export default function TabOneScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.leftHeader}>
-          <Image
-            style={styles.avatar}
-            source={{
-              uri: "https://images.unsplash.com/photo-1764377723223-2353064702b1?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-            }}
-          />
-          <Text style={styles.username}>Chef Josh</Text>
-        </View>
+<View style={styles.leftHeader}>
+  <Pressable
+    onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+    style={{ flexDirection: "row", alignItems: "center" }}
+  >
+    <Image
+      style={styles.avatar}
+      source={{
+        uri: "https://images.unsplash.com/photo-1764377723223-2353064702b1?q=80",
+      }}
+    />
+    <Text style={styles.username}>Chef Josh</Text>
+  </Pressable>
+</View>
         <FontAwesome name="bell" size={25} onPress={onLogout} />
       </View>
 
