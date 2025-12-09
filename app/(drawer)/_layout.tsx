@@ -13,7 +13,7 @@ export default function DrawerLayout() {
         name="(tabs)"
         options={{
           title: "Home Tabs",
-          drawerLabel: "Home",
+          drawerLabel: "Exit",
         }}
       />
 
@@ -23,6 +23,13 @@ export default function DrawerLayout() {
         options={{
           title: "Profile",
           drawerLabel: "Profile",
+        }}
+      />
+            <Drawer.Screen
+        name="recipes"
+        options={{
+          title: "Recipes",
+          drawerLabel: "My Recipes",
         }}
       />
     </Drawer>
