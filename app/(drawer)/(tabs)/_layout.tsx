@@ -61,7 +61,7 @@ options={{
                         <Tabs.Screen
         name="five"
 options={{
-    title: 'Community',
+    title: 'My Recipes',
     tabBarIcon: ({ color }) => <TabBarIcon name="heart" color={color} />,
     headerShown: false, // <-- hides the header
   }}
