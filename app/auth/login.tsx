@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity } from "react-native";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../lib/firebase";
 import { router } from "expo-router";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { useState } from "react";
+import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { auth } from "../../lib/firebase";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -20,7 +20,9 @@ export default function Login() {
 
   return (
     <View style={{ padding: 20, marginTop: 120 }}>
-      <Text style={{ fontSize: 32, fontWeight: "600" }}>Login</Text>
+      <Text style={{ fontSize: 32, fontWeight: "600", color: "default" }}>
+        Login
+      </Text>
 
       <TextInput
         placeholder="Email"
@@ -43,7 +45,7 @@ export default function Login() {
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.push("/auth/register")}>
-        <Text style={{ marginTop: 20,color:'white' }}>Create an account</Text>
+        <Text style={{ marginTop: 20, color: "white" }}>Create an account</Text>
       </TouchableOpacity>
     </View>
   );
@@ -55,7 +57,7 @@ const styles = {
     padding: 12,
     marginVertical: 8,
     borderRadius: 8,
-    color:'black'
+    color: "default",
   },
   btn: {
     backgroundColor: "#0e7afe",
