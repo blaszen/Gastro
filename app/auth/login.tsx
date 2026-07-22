@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  SafeAreaView,
+} from "react-native";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../lib/firebase";
 import { router } from "expo-router";
@@ -19,84 +29,140 @@ export default function Login() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Login</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Main Card / Form Box */}
+          <View style={styles.formBox}>
+            <Text style={styles.title}>Login</Text>
 
-      <TextInput
-        placeholder="Email"
-        placeholderTextColor="#666666"
-        style={styles.input}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-      />
+            <TextInput
+              placeholder="Email"
+              placeholderTextColor="#6b7280"
+              style={styles.input}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
 
-      <TextInput
-        placeholder="Password"
-        placeholderTextColor="#666666"
-        secureTextEntry
-        style={styles.input}
-        onChangeText={setPassword}
-      />
+            <TextInput
+              placeholder="Password"
+              placeholderTextColor="#6b7280"
+              secureTextEntry
+              style={styles.input}
+              onChangeText={setPassword}
+            />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TouchableOpacity style={styles.btn} onPress={onLogin}>
-        <Text style={styles.btnText}>Sign In</Text>
-      </TouchableOpacity>
+            {/* Primary Solid Button Box */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.primaryButtonBox}
+              onPress={onLogin}
+            >
+              <Text style={styles.primaryButtonText}>Sign In</Text>
+            </TouchableOpacity>
 
-<TouchableOpacity 
-  style={styles.linkBtn} 
-  onPress={() => router.push("/auth/register")}
->
-  <Text style={styles.linkText}>Create an account</Text>
-</TouchableOpacity>
-    </View>
+            {/* Secondary Outlined Button Box */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.secondaryButtonBox}
+              onPress={() => router.push("/auth/register")}
+            >
+              <Text style={styles.secondaryButtonText}>Create an Account</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-const styles = {
-  container: {
+const styles = StyleSheet.create({
+  safeArea: {
     flex: 1,
+    backgroundColor: "#ffffff",
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 30,
+  },
+  // Form container box
+  formBox: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
     padding: 20,
-    paddingTop: 120,
-    backgroundColor: "#ffffff", // Ensures screen stays white in Dark Mode
   },
   title: {
     fontSize: 32,
-    fontWeight: "600" as const,
-    color: "#000000",
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 24,
   },
   input: {
+    width: "100%",
+    height: 50,
     borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 12,
+    borderColor: "#e5e7eb",
+    paddingHorizontal: 16,
     marginVertical: 8,
-    borderRadius: 8,
-    backgroundColor: "#ffffff", // Locks input background to white
-    color: "#000000",           // Locks typed text color to black
-  },
-  btn: {
-    backgroundColor: "#0e7afe",
-    padding: 14,
-    borderRadius: 8,
-    marginTop: 20,
-  },
-  btnText: {
-    color: "#ffffff",
-    textAlign: "center" as const,
-    fontWeight: "600" as const,
-  },
-  linkText: {
-color: "#0e7afe", // Uses the same accent blue as your Sign In button
-  fontSize: 15,
-  fontWeight: "500",
+    borderRadius: 10,
+    backgroundColor: "#f9fafb",
+    color: "#111827",
+    fontSize: 16,
   },
   error: {
-    color: "#dc2626",
-    marginTop: 4,
-  },linkBtn: {
-  marginTop: 16,
-  paddingVertical: 8,
-  alignItems: "center",
-},
-};
+    color: "#ef4444",
+    marginTop: 6,
+    marginBottom: 6,
+    fontSize: 14,
+  },
+  // Primary Button Container
+  primaryButtonBox: {
+    width: "100%",
+    height: 52,
+    backgroundColor: "#0e7afe",
+    borderRadius: 10,
+    marginTop: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  primaryButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  // Secondary Button Container
+  secondaryButtonBox: {
+    width: "100%",
+    height: 52,
+    borderWidth: 1.5,
+    borderColor: "#0e7afe",
+    backgroundColor: "#ffffff",
+    borderRadius: 10,
+    marginTop: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    color: "#0e7afe",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+});
