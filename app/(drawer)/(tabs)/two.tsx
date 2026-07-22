@@ -247,7 +247,7 @@ useEffect(() => {
       {/* --- SIMPLE RECIPES --- */}
      <Text style={styles.sectionTitle}>Simple Recipes</Text>
 <ScrollView
-  horizontal
+  vertical
   showsHorizontalScrollIndicator={false}
   style={{ paddingLeft: 20 }}
   ref={simpleScrollRef}
@@ -371,9 +371,9 @@ const styles = StyleSheet.create({
 
   // Simple Recipes
   recipeCard: {
-    width: 160,
+    width: 320,
     backgroundColor: "#fff",
-    marginRight: 15,
+    
     borderRadius: 12,
     overflow: "hidden",
     elevation: 3,

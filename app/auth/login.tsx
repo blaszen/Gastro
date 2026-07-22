@@ -19,11 +19,12 @@ export default function Login() {
   };
 
   return (
-    <View style={{ padding: 20, marginTop: 120 }}>
-      <Text style={{ fontSize: 32, fontWeight: "600" }}>Login</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Login</Text>
 
       <TextInput
         placeholder="Email"
+        placeholderTextColor="#666666"
         style={styles.input}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -31,31 +32,48 @@ export default function Login() {
 
       <TextInput
         placeholder="Password"
+        placeholderTextColor="#666666"
         secureTextEntry
         style={styles.input}
         onChangeText={setPassword}
       />
 
-      {error ? <Text style={{ color: "red" }}>{error}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <TouchableOpacity style={styles.btn} onPress={onLogin}>
         <Text style={styles.btnText}>Sign In</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => router.push("/auth/register")}>
-        <Text style={{ marginTop: 20,color:'white' }}>Create an account</Text>
-      </TouchableOpacity>
+<TouchableOpacity 
+  style={styles.linkBtn} 
+  onPress={() => router.push("/auth/register")}
+>
+  <Text style={styles.linkText}>Create an account</Text>
+</TouchableOpacity>
     </View>
   );
 }
 
 const styles = {
+  container: {
+    flex: 1,
+    padding: 20,
+    paddingTop: 120,
+    backgroundColor: "#ffffff", // Ensures screen stays white in Dark Mode
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: "600" as const,
+    color: "#000000",
+  },
   input: {
     borderWidth: 1,
+    borderColor: "#ccc",
     padding: 12,
     marginVertical: 8,
     borderRadius: 8,
-    color:'black'
+    backgroundColor: "#ffffff", // Locks input background to white
+    color: "#000000",           // Locks typed text color to black
   },
   btn: {
     backgroundColor: "#0e7afe",
@@ -64,8 +82,21 @@ const styles = {
     marginTop: 20,
   },
   btnText: {
-    color: "white",
-    textAlign: "center",
-    fontWeight: "600",
+    color: "#ffffff",
+    textAlign: "center" as const,
+    fontWeight: "600" as const,
   },
+  linkText: {
+color: "#0e7afe", // Uses the same accent blue as your Sign In button
+  fontSize: 15,
+  fontWeight: "500",
+  },
+  error: {
+    color: "#dc2626",
+    marginTop: 4,
+  },linkBtn: {
+  marginTop: 16,
+  paddingVertical: 8,
+  alignItems: "center",
+},
 };
