@@ -1,4 +1,3 @@
-// app/(drawer)/(tabs)/create.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -8,95 +7,290 @@ import {
   Pressable,
   StyleSheet,
   Alert,
+  Image,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
 } from "react-native";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "../../../lib/firebase";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 
 export default function TabThreeScreen() {
   const [title, setTitle] = useState("");
   const [ingredients, setIngredients] = useState("");
   const [instructions, setInstructions] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-  if (!title.trim() || !ingredients.trim() || !instructions.trim()) {
-    Alert.alert("Please fill in all required fields");
-    return;
-  }
+    if (!title.trim() || !ingredients.trim() || !instructions.trim()) {
+      Alert.alert("Missing Details", "Please fill in all required fields.");
+      return;
+    }
 
-  console.log({ title, ingredients, instructions, imageUrl ,}, "recipe saved");
+    setLoading(true);
 
-  try {
-    await addDoc(collection(db, "recipes"), {
-      title: title.trim(),
-      ingredients: ingredients.split("\n").map(i => i.trim()),
-      instructions: instructions.trim(),
-      imageUrl: imageUrl.trim() || null,
-      createdBy: auth.currentUser?.uid,
-      createdAt: serverTimestamp(),
-    });
+    try {
+      await addDoc(collection(db, "recipes"), {
+        title: title.trim(),
+        ingredients: ingredients
+          .split("\n")
+          .map((i) => i.trim())
+          .filter(Boolean),
+        instructions: instructions.trim(),
+        imageUrl: imageUrl.trim() || null,
+        createdBy: auth.currentUser?.email || auth.currentUser?.uid || "Chef",
+        createdAt: serverTimestamp(),
+      });
 
-    Alert.alert("Recipe saved!");
-    setTitle("");
-    setIngredients("");
-    setInstructions("");
-    setImageUrl("");
-  } catch (err) {
-    console.error(err);
-    Alert.alert("Error saving recipe");
-  }
-};
-
+      Alert.alert("Success! 🎉", "Your recipe has been published to the feed.");
+      setTitle("");
+      setIngredients("");
+      setInstructions("");
+      setImageUrl("");
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Could not save your recipe. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
-      <Text style={styles.label}>Recipe Title</Text>
-      <TextInput style={styles.input} value={title} onChangeText={setTitle} />
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Top Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Create Recipe</Text>
+            <Text style={styles.headerSubtitle}>
+              Craft and share your culinary creation
+            </Text>
+          </View>
 
-      <Text style={styles.label}>Ingredients (one per line)</Text>
-      <TextInput
-        style={[styles.input, { height: 100 }]}
-        value={ingredients}
-        onChangeText={setIngredients}
-        multiline
-      />
+          {/* Main Form Container */}
+          <View style={styles.formCard}>
+            {/* Title Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Recipe Title <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Classic Creamy Carbonara"
+                placeholderTextColor="#94a3b8"
+                value={title}
+                onChangeText={setTitle}
+              />
+            </View>
 
-      <Text style={styles.label}>Instructions</Text>
-      <TextInput
-        style={[styles.input, { height: 150 }]}
-        value={instructions}
-        onChangeText={setInstructions}
-        multiline
-      />
+            {/* Ingredients Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Ingredients <Text style={styles.required}>*</Text>
+              </Text>
+              <Text style={styles.subLabel}>Enter each item on a new line</Text>
+              <TextInput
+                style={[styles.input, styles.textAreaSmall]}
+                placeholder={"200g Guanciale\n4 Egg yolks\n100g Pecorino Romano\nBlack pepper"}
+                placeholderTextColor="#94a3b8"
+                value={ingredients}
+                onChangeText={setIngredients}
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
 
+            {/* Instructions Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Instructions <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                style={[styles.input, styles.textAreaLarge]}
+                placeholder="Step-by-step preparation and cooking instructions..."
+                placeholderTextColor="#94a3b8"
+                value={instructions}
+                onChangeText={setInstructions}
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
 
+            {/* Image URL & Live Preview */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Image URL (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="https://images.unsplash.com/photo-..."
+                placeholderTextColor="#94a3b8"
+                value={imageUrl}
+                onChangeText={setImageUrl}
+                autoCapitalize="none"
+              />
 
-      <Text style={styles.label}>Image URL (optional)</Text>
-      <TextInput style={styles.input} value={imageUrl} onChangeText={setImageUrl} />
+              {/* Dynamic Image Preview */}
+              {imageUrl.trim() ? (
+                <View style={styles.previewContainer}>
+                  <Text style={styles.previewLabel}>Image Preview:</Text>
+                  <Image
+                    source={{ uri: imageUrl.trim() }}
+                    style={styles.previewImage}
+                  />
+                </View>
+              ) : null}
+            </View>
 
-      <Pressable style={styles.button} onPress={handleSubmit}>
-        <Text style={styles.buttonText}>Save Recipe</Text>
-      </Pressable>
-    </ScrollView>
+            {/* Submit Button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.submitButton,
+                loading && styles.submitButtonDisabled,
+                pressed && styles.submitButtonPressed,
+              ]}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <View style={styles.buttonContent}>
+                  <MaterialCommunityIcons name="chef-hat" size={20} color="#ffffff" style={{ marginRight: 8 }} />
+                  <Text style={styles.submitButtonText}>Publish Recipe</Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  label: { fontWeight: "600", marginTop: 15 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 5,
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
   },
-  button: {
-    backgroundColor: "#FF6347",
-    padding: 15,
-    borderRadius: 10,
-    marginTop: 20,
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  header: {
+    marginBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#0f172a",
+    letterSpacing: -0.6,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    color: "#64748b",
+    marginTop: 2,
+  },
+  formCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  inputGroup: {
+    marginBottom: 18,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 4,
+  },
+  subLabel: {
+    fontSize: 12,
+    color: "#94a3b8",
+    marginBottom: 6,
+  },
+  required: {
+    color: "#ef4444",
+  },
+  input: {
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#0f172a",
+  },
+  textAreaSmall: {
+    height: 100,
+  },
+  textAreaLarge: {
+    height: 140,
+  },
+  previewContainer: {
+    marginTop: 12,
+  },
+  previewLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748b",
+    marginBottom: 6,
+  },
+  previewImage: {
+    width: "100%",
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: "#f1f5f9",
+  },
+  submitButton: {
+    backgroundColor: "#2563eb",
+    borderRadius: 12,
+    height: 52,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
+    shadowColor: "#2563eb",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitButtonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
+  },
+  buttonContent: {
+    flexDirection: "row",
     alignItems: "center",
   },
-  buttonText: { color: "#fff", fontWeight: "600" },
+  submitButtonText: {
+    color: "blue",
+    fontSize: 16,
+    fontWeight: "700",
+  },
 });

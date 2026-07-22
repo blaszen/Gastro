@@ -18,15 +18,26 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false); // <-- Add this line
+const onLogin = async () => {
+  if (!email || !password) {
+    setError("Please enter both email and password.");
+    return;
+  }
 
-  const onLogin = async () => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.replace("/chat");
-    } catch (e: any) {
-      setError(e.message);
-    }
-  };
+  setLoading(true);
+  setError("");
+
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    // You don't need router.replace() here! 
+    // onAuthStateChanged in RootLayout automatically detects the login 
+    // and runs router.replace("/(drawer)");
+  } catch (e: any) {
+    setError(e.message.replace("Firebase: ", ""));
+    setLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.safeArea}>

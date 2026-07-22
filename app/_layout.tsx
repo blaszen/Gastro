@@ -58,13 +58,16 @@ function RootNav() {
     <GluestackUIProvider>
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-          {/* Drawer navigation */}
-          <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
+  {/* Main navigation */}
+  <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
 
-          {/* Auth screens */}
-          <Stack.Screen name="auth/login" />
-          <Stack.Screen name="auth/register" />
-        </Stack>
+  {/* Auth screens */}
+  <Stack.Screen name="auth/login" />
+  <Stack.Screen name="auth/register" />
+
+  {/* Fallback screen */}
+  <Stack.Screen name="+not-found" options={{ title: "Oops!" }} />
+</Stack>
     </ThemeProvider>
         </GluestackUIProvider>
   
