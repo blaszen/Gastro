@@ -1,5 +1,3 @@
-import { useRouter } from "expo-router";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,43 +10,114 @@ import {
   Text,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
+import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { MaterialCommunityIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
-import { db, auth } from "../../lib/firebase";
+import { db } from "../../lib/firebase";
+import { fetchUserFavorites, toggleFavoriteRecipe } from "../../lib/favorites";
 
-export default function RecipesModal() {
+export default function CommunityFeedModal() {
   const [recipes, setRecipes] = useState<any[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // Load existing favorites to highlight saved hearts
   useEffect(() => {
-    // Only query if user is logged in
-    if (!auth.currentUser) return;
+    async function loadFavorites() {
+      try {
+        const favs = await fetchUserFavorites();
+        const ids = new Set<string>(
+          (favs || []).map((f: any) => String(f.recipeId || f.id))
+        );
+        setFavoriteIds(ids);
+      } catch (err) {
+        console.error("Error loading user favorites:", err);
+      }
+    }
+    loadFavorites();
+  }, []);
 
-    // Queries user's personal recipes (Private + Public owned by user)
-    const q = query(
+  useEffect(() => {
+    // Query ONLY public recipes
+    const communityQuery = query(
       collection(db, "recipes"),
-      where("userId", "==", auth.currentUser.uid),
+      where("isPublic", "==", true),
       orderBy("createdAt", "desc")
     );
 
     const unsubscribe = onSnapshot(
-      q,
+      communityQuery,
       (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const data = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((recipe: any) => recipe.isPublic === true);
+
         setRecipes(data);
         setLoading(false);
       },
       (error) => {
-        console.error("Firestore user recipes error:", error);
+        console.error("Firestore community feed error:", error);
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
   }, []);
+
+  const handleToggleFavorite = async (item: any) => {
+    const itemIdStr = String(item.id);
+    const isCurrentlyFav = favoriteIds.has(itemIdStr);
+
+    // Optimistic UI update
+    setFavoriteIds((prev) => {
+      const updated = new Set(prev);
+      if (isCurrentlyFav) {
+        updated.delete(itemIdStr);
+      } else {
+        updated.add(itemIdStr);
+      }
+      return updated;
+    });
+
+    try {
+      const displayTitle =
+        item.title || item.recipeTitle || item.name || item.caption || "Specialty Dish";
+      const displayImage = item.imageUrl || item.image || item.photoUrl || "";
+
+      // Standardize payload with explicit fallback keys for Firestore
+      const favPayload = {
+        id: itemIdStr,
+        recipeId: itemIdStr,
+        title: displayTitle,
+        recipeTitle: displayTitle,
+        name: displayTitle,
+        image: displayImage,
+        imageUrl: displayImage,
+        photoUrl: displayImage,
+        sourceUrl: `/(modals)/recipe/${item.id}`,
+        url: `/(modals)/recipe/${item.id}`,
+        isCustom: true,
+      };
+
+      await toggleFavoriteRecipe(favPayload, isCurrentlyFav);
+    } catch (err) {
+      console.error("Failed to toggle favorite:", err);
+      // Revert if error occurs
+      setFavoriteIds((prev) => {
+        const updated = new Set(prev);
+        if (isCurrentlyFav) {
+          updated.add(itemIdStr);
+        } else {
+          updated.delete(itemIdStr);
+        }
+        return updated;
+      });
+    }
+  };
 
   const formatTimeAgo = (timestamp: any) => {
     if (!timestamp) return "Recently";
@@ -64,7 +133,7 @@ export default function RecipesModal() {
   };
 
   const formatAuthorName = (name: string) => {
-    if (!name) return "Anonymous Chef";
+    if (!name) return "Chef";
     if (name.includes("@")) return name.split("@")[0];
     if (name.length > 14) return `${name.slice(0, 10)}...`;
     return name;
@@ -77,9 +146,11 @@ export default function RecipesModal() {
       ? String(item.ingredients).split(",").filter(Boolean).length
       : 0;
 
+    const isFav = favoriteIds.has(String(item.id));
+
     return (
       <Pressable
-        onPress={() => router.push(`/(modals)/recipe/${item.id}`)}
+        onPress={() => router.push(`/(modals)/recipe/${item.id}` as any)}
         style={({ pressed }) => [
           styles.card,
           pressed && styles.cardPressed,
@@ -87,32 +158,47 @@ export default function RecipesModal() {
       >
         {/* Card Header / Image Area */}
         <View style={styles.imageContainer}>
-          {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={styles.image} />
+          {item.imageUrl || item.image ? (
+            <Image source={{ uri: item.imageUrl || item.image }} style={styles.image} />
           ) : (
             <View style={styles.placeholderBanner}>
               <View style={styles.iconCircle}>
                 <MaterialCommunityIcons name="chef-hat" size={26} color="#f59e0b" />
               </View>
               <Text style={styles.placeholderTag} numberOfLines={1}>
-                {item.title || "Specialty Dish"}
+                {item.title || item.name || "Specialty Dish"}
               </Text>
             </View>
           )}
 
-          {/* Floating Time Pill */}
+          {/* Time Badge */}
           <View style={styles.timeBadge}>
             <Ionicons name="time-outline" size={12} color="#f4f4f5" style={{ marginRight: 4 }} />
             <Text style={styles.timeBadgeText}>
               {formatTimeAgo(item.createdAt)}
             </Text>
           </View>
+
+          {/* Heart Favorite Button */}
+          <Pressable
+            style={styles.favoriteButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleToggleFavorite(item);
+            }}
+          >
+            <FontAwesome
+              name={isFav ? "heart" : "heart-o"}
+              size={15}
+              color={isFav ? "#ef4444" : "#a1a1aa"}
+            />
+          </Pressable>
         </View>
 
-        {/* Card Content Details */}
+        {/* Card Details */}
         <View style={styles.cardDetails}>
           <Text style={styles.title} numberOfLines={1}>
-            {item.title || "Untitled Recipe"}
+            {item.title || item.name || "Untitled Recipe"}
           </Text>
 
           <View style={styles.metaRow}>
@@ -151,7 +237,7 @@ export default function RecipesModal() {
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
         <ActivityIndicator size="large" color="#f59e0b" />
-        <Text style={styles.loadingText}>Gathering recipes...</Text>
+        <Text style={styles.loadingText}>Gathering community dishes...</Text>
       </View>
     );
   }
@@ -159,44 +245,30 @@ export default function RecipesModal() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
-
-      {/* Top Action Bar with Close Button */}
-      <View style={styles.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.closeBtn,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons name="close" size={20} color="#a1a1aa" />
-        </Pressable>
-      </View>
-
       <FlatList
         data={recipes}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderRecipeCard}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.header}>
             <Text style={styles.headerTitle}>
-              My Recipes<Text style={styles.brandDot}>.</Text>
+              Community Feed<Text style={styles.brandDot}>.</Text>
             </Text>
             <Text style={styles.headerSubtitle}>
-              Manage your personal and published dishes
+              Explore public creations from other chefs
             </Text>
           </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconBg}>
-              <FontAwesome name="book" size={24} color="#f59e0b" />
+              <FontAwesome name="globe" size={24} color="#f59e0b" />
             </View>
-            <Text style={styles.emptyTitle}>No Personal Recipes</Text>
+            <Text style={styles.emptyTitle}>No Public Recipes</Text>
             <Text style={styles.emptyText}>
-              You haven't added any recipes to your collection yet!
+              No community dishes found yet. Share one of your recipes to get things started!
             </Text>
           </View>
         }
@@ -209,28 +281,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",
-  },
-  topBar: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 4,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#181b20",
-    borderWidth: 1,
-    borderColor: "#27272a",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  pressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.95 }],
   },
   loadingContainer: {
     flex: 1,
@@ -246,11 +296,9 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 16,
     paddingBottom: 40,
   },
-
-  // Header
   header: {
     marginBottom: 20,
   },
@@ -268,8 +316,6 @@ const styles = StyleSheet.create({
     color: "#a1a1aa",
     marginTop: 2,
   },
-
-  // Recipe Cards
   card: {
     width: "100%",
     backgroundColor: "#181b20",
@@ -322,7 +368,7 @@ const styles = StyleSheet.create({
   timeBadge: {
     position: "absolute",
     top: 12,
-    right: 12,
+    left: 12,
     backgroundColor: "rgba(15, 17, 21, 0.85)",
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -337,8 +383,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
-
-  // Card Content
+  favoriteButton: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    backgroundColor: "rgba(15, 17, 21, 0.85)",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: "#27272a",
+  },
   cardDetails: {
     padding: 16,
   },
@@ -393,8 +450,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-
-  // Empty State
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",

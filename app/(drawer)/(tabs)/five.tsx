@@ -1,165 +1,232 @@
-import { useRouter } from "expo-router";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import React, { useEffect, useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Pressable,
-  SafeAreaView,
-  StyleSheet,
-  Text,
   View,
+  Text,
+  ScrollView,
+  Pressable,
+  Image,
+  StyleSheet,
+  ActivityIndicator,
+  Linking,
+  SafeAreaView,
+  StatusBar,
+  Alert,
+  RefreshControl,
 } from "react-native";
-import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
-import { db } from "../../../lib/firebase";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import { fetchUserFavorites, toggleFavoriteRecipe } from "../../../lib/favorites";
 
-export default function TabFiveScreen() {
-  const [recipes, setRecipes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+interface Recipe {
+  id: string | number;
+  recipeId?: string | number;
+  title?: string;
+  recipeTitle?: string;
+  name?: string;
+  caption?: string;
+  image?: string;
+  imageUrl?: string;
+  photoUrl?: string;
+  sourceUrl?: string;
+  url?: string;
+  readyInMinutes?: number;
+  servings?: number;
+  item?: any;
+}
+
+export default function FavoritesScreen() {
   const router = useRouter();
+  const [favorites, setFavorites] = useState<Recipe[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  useEffect(() => {
-    const q = query(collection(db, "recipes"), orderBy("createdAt", "desc"));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setRecipes(data);
+  // Fetch full favorite recipes on mount and screen focus
+  const loadFavoritesData = async () => {
+    try {
+      setLoading(true);
+      const favRecipes = await fetchUserFavorites();
+      setFavorites(favRecipes || []);
+    } catch (err) {
+      console.error("Error loading favorites:", err);
+      Alert.alert("Error", "Could not load saved favorites.");
+    } finally {
       setLoading(false);
-    });
-
-    return unsubscribe;
-  }, []);
-
-  const formatTimeAgo = (timestamp: any) => {
-    if (!timestamp) return "Recently";
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    if (seconds < 60) return "Just now";
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+      setRefreshing(false);
+    }
   };
 
-  // Truncates long Firebase UIDs like "goakhchwrwV1OZ1..." into "goakhc..."
-  const formatAuthorName = (name: string) => {
-    if (!name) return "Anonymous Chef";
-    if (name.includes("@")) return name.split("@")[0]; // Email fallback
-    if (name.length > 12) return `${name.slice(0, 8)}...`;
-    return name;
+  useFocusEffect(
+    useCallback(() => {
+      loadFavoritesData();
+    }, [])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadFavoritesData();
   };
 
-  const renderRecipeCard = ({ item }: { item: any }) => {
-    const ingredientCount = Array.isArray(item.ingredients)
-      ? item.ingredients.length
-      : item.ingredients
-      ? String(item.ingredients).split(",").filter(Boolean).length
-      : 0;
+  // Remove recipe from favorites (Optimistic update)
+  const handleRemoveFavorite = async (recipe: Recipe) => {
+    const recipeIdStr = String(recipe.recipeId || recipe.id);
 
-    return (
-      <Pressable
-        onPress={() => router.push(`/(modals)/recipe/${item.id}`)}
-        style={({ pressed }) => [
-          styles.card,
-          pressed && styles.cardPressed,
-        ]}
-      >
-        {/* Card Header / Image Area */}
-        <View style={styles.imageContainer}>
-          {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={styles.image} />
-          ) : (
-            /* Modern Chef Gradient/Pattern Banner */
-            <View style={styles.placeholderBanner}>
-              <View style={styles.iconCircle}>
-                <MaterialCommunityIcons name="chef-hat" size={32} color="#0e7afe" />
-              </View>
-              <Text style={styles.placeholderTag}>Kitchen Recipe</Text>
-            </View>
-          )}
-
-          {/* Floating Time Pill */}
-          <View style={styles.timeBadge}>
-            <Ionicons name="time-outline" size={12} color="#ffffff" style={{ marginRight: 4 }} />
-            <Text style={styles.timeBadgeText}>
-              {formatTimeAgo(item.createdAt)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Card Body Details */}
-        <View style={styles.cardDetails}>
-          <Text style={styles.title} numberOfLines={1}>
-            {item.title || "Untitled Recipe"}
-          </Text>
-
-          <View style={styles.metaRow}>
-            {/* Author Tag */}
-            <View style={styles.authorBadge}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {(item.createdBy || "C").charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.byline} numberOfLines={1}>
-                {formatAuthorName(item.createdBy)}
-              </Text>
-            </View>
-
-            {/* Ingredient Count Tag */}
-            <View style={styles.ingredientBadge}>
-              <MaterialCommunityIcons name="silverware-fork-knife" size={12} color="#475569" style={{ marginRight: 4 }} />
-              <Text style={styles.ingredientBadgeText}>
-                {ingredientCount} {ingredientCount === 1 ? "item" : "items"}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </Pressable>
+    // Optimistically filter out from UI
+    setFavorites((prev) =>
+      prev.filter((r) => String(r.recipeId || r.id) !== recipeIdStr)
     );
+
+    try {
+      await toggleFavoriteRecipe(recipe, true);
+    } catch (err) {
+      console.error("Error removing favorite from Firestore:", err);
+      setFavorites((prev) => [...prev, recipe]);
+      Alert.alert("Error", "Failed to remove favorite. Please try again.");
+    }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0e7afe" />
-        <Text style={styles.loadingText}>Fetching recipe feed...</Text>
-      </View>
-    );
-  }
+  const openRecipeLink = (url?: string | null, recipeId?: string | number) => {
+    if (url) {
+      if (url.startsWith("/(")) {
+        router.push(url as any);
+        return;
+      }
+      if (url.startsWith("http")) {
+        Linking.openURL(url);
+        return;
+      }
+    }
+
+    if (recipeId) {
+      router.push(`/(modals)/recipe/${recipeId}` as any);
+      return;
+    }
+
+    Alert.alert("Notice", "Recipe link not available.");
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlatList
-        data={recipes}
-        keyExtractor={(item) => item.id}
-        renderItem={renderRecipeCard}
-        contentContainerStyle={styles.listContent}
+      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+
+      {/* HEADER */}
+      <View style={styles.header}>
+        <View style={styles.headerTitleRow}>
+          <View style={styles.amberAccentBar} />
+          <Text style={styles.headerTitle}>Saved Creations</Text>
+        </View>
+        <Text style={styles.badgeCount}>{favorites.length} Saved</Text>
+      </View>
+
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Recipe Feed</Text>
-            <Text style={styles.headerSubtitle}>
-              Explore newly created kitchen dishes
-            </Text>
-          </View>
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#f59e0b"
+            colors={["#f59e0b"]}
+          />
         }
-        ListEmptyComponent={
+      >
+        {/* LOADING STATE */}
+        {loading && !refreshing && (
+          <View style={styles.loaderBox}>
+            <ActivityIndicator size="small" color="#f59e0b" />
+          </View>
+        )}
+
+        {/* EMPTY STATE */}
+        {!loading && favorites.length === 0 && (
           <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="book-open-page-variant-outline" size={56} color="#94a3b8" />
-            <Text style={styles.emptyTitle}>No Recipes Found</Text>
-            <Text style={styles.emptyText}>
-              Head over to the create tab to craft your first dish!
+            <View style={styles.emptyIconWrapper}>
+              <FontAwesome name="heart-o" size={32} color="#3f3f46" />
+            </View>
+            <Text style={styles.emptyTitle}>No Favorites Saved Yet</Text>
+            <Text style={styles.emptySubtext}>
+              Tap the heart icon on any recipe or dish creation to build your personal cookbook library.
             </Text>
           </View>
-        }
-      />
+        )}
+
+        {/* FAVORITES GRID LIST */}
+        {!loading && favorites.length > 0 && (
+          <View style={styles.gridContainer}>
+            {favorites.map((recipe: any, index: number) => {
+              const targetId = recipe.recipeId || recipe.id;
+              const itemKey = targetId ? `fav-${targetId}` : `fav-idx-${index}`;
+
+              // Dynamic property lookups to catch raw Firestore documents
+              const displayTitle =
+                recipe.title ||
+                recipe.recipeTitle ||
+                recipe.name ||
+                recipe.caption ||
+                recipe.item?.title ||
+                recipe.item?.recipeTitle ||
+                recipe.item?.name ||
+                "Specialty Dish";
+
+              const displayImage =
+                recipe.image ||
+                recipe.imageUrl ||
+                recipe.photoUrl ||
+                recipe.item?.image ||
+                recipe.item?.imageUrl;
+
+              const displayUrl =
+                recipe.sourceUrl ||
+                recipe.url ||
+                (targetId ? `/(modals)/recipe/${targetId}` : null);
+
+              return (
+                <Pressable
+                  key={itemKey}
+                  style={styles.card}
+                  onPress={() => openRecipeLink(displayUrl, targetId)}
+                >
+                  <View style={styles.imageWrapper}>
+                    {displayImage ? (
+                      <Image source={{ uri: displayImage }} style={styles.image} />
+                    ) : (
+                      <View style={styles.placeholderBanner}>
+                        <View style={styles.iconCircle}>
+                          <MaterialCommunityIcons name="chef-hat" size={26} color="#f59e0b" />
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Remove Favorite Button */}
+                    <Pressable
+                      style={styles.favoriteBadge}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleRemoveFavorite(recipe);
+                      }}
+                    >
+                      <FontAwesome name="heart" size={14} color="#ef4444" />
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.cardBody}>
+                    <Text style={styles.recipeTitle} numberOfLines={2}>
+                      {displayTitle}
+                    </Text>
+
+                    <View style={styles.cardFooter}>
+                      <Text style={styles.savedBadge}>Bookmarked</Text>
+                      <Text style={styles.linkText}>View Recipe →</Text>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -167,180 +234,171 @@ export default function TabFiveScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#0f1115",
   },
-  loadingContainer: {
+  container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#0f1115",
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  listContent: {
-    paddingHorizontal: 18,
-    paddingTop: 16,
+  scrollContent: {
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
   header: {
-    marginBottom: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#181b20",
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  amberAccentBar: {
+    width: 4,
+    height: 18,
+    backgroundColor: "#f59e0b",
+    borderRadius: 2,
+    marginRight: 10,
   },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: -0.6,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#f4f4f5",
+    letterSpacing: 0.3,
   },
-  headerSubtitle: {
-    fontSize: 15,
-    color: "#64748b",
-    marginTop: 2,
+  badgeCount: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#a1a1aa",
+    backgroundColor: "#181b20",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#27272a",
+  },
+  gridContainer: {
+    marginTop: 16,
   },
   card: {
     width: "100%",
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
+    backgroundColor: "#181b20",
+    borderRadius: 16,
     overflow: "hidden",
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginBottom: 18,
-    shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
+    borderColor: "#27272a",
   },
-  cardPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.985 }],
-  },
-  imageContainer: {
-    width: "100%",
-    height: 160, // Fixed clean height for full-width banner
+  imageWrapper: {
     position: "relative",
+    width: "100%",
+    height: 160,
+    backgroundColor: "#27272a",
   },
   image: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
   placeholderBanner: {
     width: "100%",
     height: "100%",
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#181b20",
     justifyContent: "center",
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#dbeafe",
   },
   iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#ffffff",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#0f1115",
+    borderWidth: 1,
+    borderColor: "#27272a",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#0e7afe",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
-    marginBottom: 6,
   },
-  placeholderTag: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#3b82f6",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  timeBadge: {
+  favoriteBadge: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    backgroundColor: "rgba(15, 23, 42, 0.75)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  timeBadgeText: {
-    color: "#ffffff",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  cardDetails: {
-    padding: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0f172a",
-    marginBottom: 12,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  authorBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#dbeafe",
+    top: 10,
+    right: 10,
+    backgroundColor: "rgba(15, 17, 21, 0.85)",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 8,
+    borderWidth: 0.5,
+    borderColor: "#f59e0b",
   },
-  avatarText: {
-    fontSize: 11,
+  cardBody: {
+    padding: 14,
+  },
+  recipeTitle: {
+    fontSize: 15,
     fontWeight: "700",
-    color: "#1d4ed8",
+    color: "#f4f4f5",
+    lineHeight: 20,
+    marginBottom: 10,
   },
-  byline: {
-    color: "#475569",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  ingredientBadge: {
+  cardFooter: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#f1f5f9",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
   },
-  ingredientBadgeText: {
-    color: "#475569",
+  savedBadge: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#f59e0b",
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: "#f59e0b",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  linkText: {
+    color: "#f59e0b",
     fontSize: 12,
     fontWeight: "600",
+  },
+  loaderBox: {
+    paddingVertical: 40,
+    alignItems: "center",
   },
   emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
     paddingVertical: 60,
     paddingHorizontal: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyIconWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 18,
+    color: "#f4f4f5",
+    fontSize: 16,
     fontWeight: "700",
-    color: "#0f172a",
-    marginTop: 12,
+    marginBottom: 6,
   },
-  emptyText: {
-    fontSize: 14,
-    color: "#64748b",
+  emptySubtext: {
+    color: "#71717a",
+    fontSize: 13,
     textAlign: "center",
-    marginTop: 6,
-    lineHeight: 20,
+    lineHeight: 18,
+    maxWidth: 260,
   },
 });

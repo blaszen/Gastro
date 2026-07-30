@@ -5149,6 +5149,16 @@ expo-asset@~12.0.10:
     "@expo/image-utils" "^0.8.7"
     expo-constants "~18.0.10"
 
+expo-audio@~1.1.1:
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/expo-audio/-/expo-audio-1.1.1.tgz#7b9763118e321c5dfbf2771cd4a5b6790ce4fc8d"
+  integrity sha512-CPCpJ+0AEHdzWROc0f00Zh6e+irLSl2ALos/LPvxEeIcJw1APfBa4DuHPkL4CQCWsVe7EnUjFpdwpqsEUWcP0g==
+
+expo-av@~16.0.8:
+  version "16.0.8"
+  resolved "https://registry.yarnpkg.com/expo-av/-/expo-av-16.0.8.tgz#b1671127f3b2ecaeb9c69fc2301cf791d4504dd6"
+  integrity sha512-cmVPftGR/ca7XBgs7R6ky36lF3OC0/MM/lpgX/yXqfv0jASTsh7AYX9JxHCwFmF+Z6JEB1vne9FDx4GiLcGreQ==
+
 expo-constants@~18.0.10:
   version "18.0.10"
   resolved "https://registry.npmjs.org/expo-constants/-/expo-constants-18.0.10.tgz"
@@ -5168,6 +5178,18 @@ expo-font@~14.0.9:
   integrity sha512-xCoQbR/36qqB6tew/LQ6GWICpaBmHLhg/Loix5Rku/0ZtNaXMJv08M9o1AcrdiGTn/Xf/BnLu6DgS45cWQEHZg==
   dependencies:
     fontfaceobserver "^2.1.0"
+
+expo-image-loader@~6.0.0:
+  version "6.0.0"
+  resolved "https://registry.yarnpkg.com/expo-image-loader/-/expo-image-loader-6.0.0.tgz#15230442cbb90e101c080a4c81e37d974e43e072"
+  integrity sha512-nKs/xnOGw6ACb4g26xceBD57FKLFkSwEUTDXEDF3Gtcu3MqF3ZIYd3YM+sSb1/z9AKV1dYT7rMSGVNgsveXLIQ==
+
+expo-image-picker@~17.0.11:
+  version "17.0.11"
+  resolved "https://registry.yarnpkg.com/expo-image-picker/-/expo-image-picker-17.0.11.tgz#8f1537df946f7c19747ba9d0043ef7e3e8cb67dc"
+  integrity sha512-/apkoyukDvsCHHb9fzP+F34A1uQqSzUtYH/2P/xJACNEwq+mwEXjXvVU8bzlJq6ih0Qo1+tpVivIa7B9kYSwOQ==
+  dependencies:
+    expo-image-loader "~6.0.0"
 
 expo-keep-awake@~15.0.7:
   version "15.0.7"
@@ -5247,6 +5269,11 @@ expo-status-bar@~3.0.8:
   integrity sha512-L248XKPhum7tvREoS1VfE0H6dPCaGtoUWzRsUv7hGKdiB4cus33Rc0sxkWkoQ77wE8stlnUlL5lvmT0oqZ3ZBw==
   dependencies:
     react-native-is-edge-to-edge "^1.2.1"
+
+expo-video@~3.0.16:
+  version "3.0.16"
+  resolved "https://registry.yarnpkg.com/expo-video/-/expo-video-3.0.16.tgz#8160bd33fe2e898519d3c18a404567a30d81d4f2"
+  integrity sha512-H1HlxcHGomZItqisGfW3YL/G9BHtNBfVSimDJcLuyxyU87wFnV8loO9tCjuhufkfh/aTa2sW5BYAjLjg9DvnBQ==
 
 expo-web-browser@~15.0.9:
   version "15.0.9"

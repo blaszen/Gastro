@@ -1,72 +1,224 @@
-import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, Pressable, Image, StatusBar } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { DrawerContentScrollView } from "@react-navigation/drawer";
-import { useRouter } from "expo-router";
+import { useRouter, usePathname } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { getAuth } from "firebase/auth";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "../../lib/firebase";
 
 function CustomDrawerContent(props: any) {
   const router = useRouter();
+  const currentPath = usePathname();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Real-time listener for pending notifications / friend requests
+  useEffect(() => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    const reqRef = collection(db, "users", currentUser.uid, "friendRequests");
+    const q = query(reqRef, where("status", "==", "pending"));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setUnreadCount(snapshot.size);
+      },
+      (err) => console.error("Error fetching notification badge count:", err)
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   const menuItems = [
     {
       label: "Home",
-      icon: "home",
+      icon: "cutlery",
+      path: "/(drawer)/(tabs)",
+      badge: 0,
       action: () => {
         props.navigation.closeDrawer();
         router.push("/(drawer)/(tabs)");
       },
     },
     {
-      label: "My Profile",
-      icon: "user",
+      label: "Messages",
+      icon: "comments",
+      path: "/messages",
+      badge: 0,
       action: () => {
         props.navigation.closeDrawer();
-        router.push("/profile");
+        router.push("/messages" as any);
+      },
+    },
+    {
+      label: "Notifications",
+      icon: "bell",
+      path: "/notifications",
+      badge: unreadCount,
+      action: () => {
+        props.navigation.closeDrawer();
+        router.push("/notifications" as any);
+      },
+    },
+    {
+      label: "My Profile",
+      icon: "user-o",
+      path: "/profile",
+      badge: 0,
+      action: () => {
+        props.navigation.closeDrawer();
+        router.push("/profile" as any);
       },
     },
     {
       label: "My Recipes",
       icon: "book",
+      path: "/recipes",
+      badge: 0,
       action: () => {
         props.navigation.closeDrawer();
-        router.push("/recipes");
+        router.push("/recipes" as any);
+      },
+    },
+    {
+      label: "Other Chef's Recipes",
+      icon: "globe",
+      path: "/community",
+      badge: 0,
+      action: () => {
+        props.navigation.closeDrawer();
+        router.push("/community" as any);
       },
     },
     {
       label: "Prep & Grocery",
       icon: "shopping-basket",
+      path: "/grocery",
+      badge: 0,
       action: () => {
         props.navigation.closeDrawer();
-        router.push("/grocery");
+        router.push("/grocery" as any);
       },
     },
-
+    {
+      label: "Settings",
+      icon: "sliders",
+      path: "/settings",
+      badge: 0,
+      action: () => {
+        props.navigation.closeDrawer();
+        router.push("/(drawer)/settings" as any);
+      },
+    },
   ];
 
   return (
-    <DrawerContentScrollView {...props} contentContainerStyle={styles.container}>
-      <Text style={styles.menuHeader}>Menu</Text>
-      {menuItems.map((item, index) => (
-        <Pressable
-          key={index}
-          style={({ pressed }) => [
-            styles.drawerItem,
-            pressed && styles.drawerItemPressed,
-          ]}
-          onPress={item.action}
-        >
-          <View style={styles.row}>
-            <View style={styles.iconBox}>
-              <FontAwesome name={item.icon as any} size={18} color="#334155" />
+    <View style={styles.outerContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <DrawerContentScrollView
+        {...props}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.brandTitle}>
+            Gastro<Text style={styles.brandDot}>.</Text>
+          </Text>
+          <Text style={styles.brandSubtitle}>Community Culinary Hub</Text>
+        </View>
+
+        {/* Profile Header */}
+        <View style={styles.profileRow}>
+          <Image
+            source={{
+              uri: "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200",
+            }}
+            style={styles.avatar}
+          />
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>Chef Josh</Text>
+            <View style={styles.badgePill}>
+              <FontAwesome name="star" size={9} color="#f59e0b" />
+              <Text style={styles.badgeText}>Pro Home Chef</Text>
             </View>
-            <Text style={styles.label} numberOfLines={1}>
-              {item.label}
+          </View>
+        </View>
+
+        {/* Section Title */}
+        <Text style={styles.sectionTitle}>EXPLORE</Text>
+
+        {/* Navigation List */}
+        <View style={styles.menuContainer}>
+          {menuItems.map((item, index) => {
+            const isActive = currentPath.includes(item.path);
+
+            return (
+              <Pressable
+                key={index}
+                style={({ pressed }) => [
+                  styles.navItem,
+                  isActive && styles.navItemActive,
+                  pressed && styles.navItemPressed,
+                ]}
+                onPress={item.action}
+              >
+                <View style={styles.navRow}>
+                  <View
+                    style={[
+                      styles.iconWrapper,
+                      isActive && styles.iconWrapperActive,
+                    ]}
+                  >
+                    <FontAwesome
+                      name={item.icon as any}
+                      size={15}
+                      color={isActive ? "#f59e0b" : "#a1a1aa"}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.navLabel,
+                      isActive && styles.navLabelActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.label}
+                  </Text>
+
+                  {item.badge > 0 && (
+                    <View style={styles.notificationBadge}>
+                      <Text style={styles.notificationBadgeText}>
+                        {item.badge}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </DrawerContentScrollView>
+
+      {/* Floating Kitchen Feed Banner */}
+      <View style={styles.footer}>
+        <View style={styles.communityBanner}>
+          <View style={styles.communityIconBg}>
+            <FontAwesome name="users" size={14} color="#f59e0b" />
+          </View>
+          <View style={styles.communityContent}>
+            <Text style={styles.communityTitle}>Kitchen Feed</Text>
+            <Text style={styles.communitySubtitle}>
+              1.4k chefs cooking right now
             </Text>
           </View>
-        </Pressable>
-      ))}
-    </DrawerContentScrollView>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -77,11 +229,18 @@ export default function DrawerLayout() {
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
         headerShown: false,
+        drawerStyle: {
+          backgroundColor: "#0f1115",
+          width: "78%",
+        },
       }}
     >
       <Drawer.Screen name="(tabs)" options={{ title: "Home" }} />
+      <Drawer.Screen name="messages" options={{ title: "Messages" }} />
+      <Drawer.Screen name="notifications" options={{ title: "Notifications" }} />
       <Drawer.Screen name="profile" options={{ title: "Profile" }} />
       <Drawer.Screen name="recipes" options={{ title: "Recipes" }} />
+      <Drawer.Screen name="community" options={{ title: "CommunityRecipes" }} />
       <Drawer.Screen name="grocery" options={{ title: "Grocery" }} />
       <Drawer.Screen name="settings" options={{ title: "Settings" }} />
     </Drawer>
@@ -89,42 +248,181 @@ export default function DrawerLayout() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingVertical: 20,
+  outerContainer: {
+    flex: 1,
+    backgroundColor: "#0f1115",
   },
-  menuHeader: {
-    fontSize: 18,
+  scrollContent: {
+    paddingTop: 50,
+    paddingHorizontal: 20,
+  },
+  header: {
+    marginBottom: 24,
+  },
+  brandTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#f4f4f5",
+    letterSpacing: -0.8,
+  },
+  brandDot: {
+    color: "#f59e0b",
+  },
+  brandSubtitle: {
+    fontSize: 12,
+    color: "#71717a",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    padding: 12,
+    borderRadius: 18,
+    marginBottom: 28,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 12,
+  },
+  profileInfo: {
+    justifyContent: "center",
+    gap: 4,
+  },
+  profileName: {
+    fontSize: 15,
     fontWeight: "700",
-    color: "#0f172a",
-    marginHorizontal: 16,
-    marginBottom: 16,
+    color: "#f4f4f5",
   },
-  drawerItem: {
+  badgePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.25)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    gap: 4,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#f59e0b",
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#52525b",
+    letterSpacing: 1.2,
+    marginBottom: 12,
+    paddingLeft: 4,
+  },
+  menuContainer: {
+    width: "100%",
+    gap: 4,
+  },
+  navItem: {
+    borderRadius: 14,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  navRow: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    marginHorizontal: 8,
-    marginBottom: 4,
+    width: "100%",
   },
-  drawerItemPressed: {
-    backgroundColor: "#f1f5f9",
+  navItemActive: {
+    backgroundColor: "#181b20",
+    borderColor: "#27272a",
   },
-  row: {
-    flexDirection: "row",       // Strictly forces horizontal layout
-    alignItems: "center",       // Vertically aligns icon and label center
-    width: "100%",              // Takes full width of drawer item
+  navItemPressed: {
+    backgroundColor: "#181b20",
+    opacity: 0.8,
   },
-  iconBox: {
-    width: 32,                  // Fixed width for icon block
-    height: 32,                 // Fixed height to ensure square box
+  iconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 10,
+    marginRight: 12,
   },
-  label: {
+  iconWrapperActive: {
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    borderColor: "rgba(245, 158, 11, 0.3)",
+  },
+  navLabel: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#334155",
-    flexShrink: 1,              // Prevents pushing text off screen
+    color: "#a1a1aa",
+    flex: 1,
+  },
+  navLabelActive: {
+    color: "#f59e0b",
+    fontWeight: "700",
+  },
+  notificationBadge: {
+    backgroundColor: "#f59e0b",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 6,
+  },
+  notificationBadgeText: {
+    color: "#0f1115",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  footer: {
+    padding: 20,
+    paddingBottom: 32,
+  },
+  communityBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    padding: 12,
+    borderRadius: 16,
+    gap: 12,
+  },
+  communityIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.25)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  communityContent: {
+    flex: 1,
+  },
+  communityTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#f4f4f5",
+  },
+  communitySubtitle: {
+    fontSize: 11,
+    color: "#a1a1aa",
+    marginTop: 1,
   },
 });
