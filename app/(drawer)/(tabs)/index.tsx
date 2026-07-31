@@ -21,7 +21,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { signOut } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
-import { searchRecipes } from "../../../lib/spoonacular";
+import { searchRecipes, getRecipeInformation }from "../../../lib/spoonacular";
 import { useAudioPlayer } from "expo-audio";
 import { router } from "expo-router";
 
@@ -30,15 +30,32 @@ const ALARM_SOUND_URI =
   "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
 
 // --- Data Types ---
+// Add / Update Recipe Interface
+interface ExtendedIngredient {
+  id: number;
+  original: string;
+}
+
+interface InstructionStep {
+  number: number;
+  step: string;
+}
 interface Recipe {
-  id: string;
+  id: string | number;
   title: string;
   image: string;
-  time?: string;
+  time?: string | number;
+  readyInMinutes?: number;
   tag?: string;
   rating?: string;
   url?: string;
   sourceUrl?: string;
+  summary?: string;
+  servings?: number;
+  extendedIngredients?: ExtendedIngredient[];
+  analyzedInstructions?: {
+    steps: InstructionStep[];
+  }[];
 }
 
 interface Video {
@@ -150,6 +167,25 @@ const services: Service[] = [
 ];
 
 export default function TabOneScreen() {
+  // Inside TabOneScreen component state declaration:
+const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+const [recipeModalVisible, setRecipeModalVisible] = useState(false);
+// Add loading state for recipe details if needed
+const [loadingDetails, setLoadingDetails] = useState(false);
+const handleRecipePress = async (recipe: Recipe) => {
+  setLoadingDetails(true);
+  setRecipeModalVisible(true);
+
+  const fullDetails = await getRecipeInformation(recipe.id);
+
+  if (fullDetails) {
+    setSelectedRecipe(fullDetails);
+  } else {
+    setSelectedRecipe(recipe);
+  }
+
+  setLoadingDetails(false);
+};
   const [search, setSearch] = useState("");
   const navigation = useNavigation();
 
@@ -303,48 +339,50 @@ export default function TabOneScreen() {
   };
 
   const renderRecipeCard = (item: Recipe) => (
-    <TouchableOpacity
-      key={item.id}
-      activeOpacity={0.88}
-      style={[styles.card, { width: CARD_WIDTH }]}
-      onPress={() => handleOpenLink(item.sourceUrl || item.url)}
-    >
-      <View style={styles.imageWrapper}>
-        <Image
-          source={{ uri: item.image }}
-          style={styles.cardImage}
-          resizeMode="cover"
-        />
-        {item.tag && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{item.tag}</Text>
-          </View>
-        )}
-        {item.time && (
-          <View style={styles.timeBadge}>
-            <FontAwesome
-              name="clock-o"
-              size={10}
-              color="#f59e0b"
-              style={{ marginRight: 4 }}
-            />
-            <Text style={styles.timeText}>{item.time}</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle} numberOfLines={1}>
-          {item.title}
-        </Text>
-        <View style={styles.metaRow}>
-          <FontAwesome name="star" size={12} color="#f59e0b" />
-          <Text style={styles.ratingText}>{item.rating || "4.8"}</Text>
-          <Text style={styles.dot}>•</Text>
-          <Text style={styles.metaText}>Featured</Text>
+  <TouchableOpacity
+    key={item.id}
+    activeOpacity={0.88}
+    style={[styles.card, { width: CARD_WIDTH }]}
+    onPress={() => handleRecipePress(item)}
+  >
+    <View style={styles.imageWrapper}>
+      <Image
+        source={{ uri: item.image }}
+        style={styles.cardImage}
+        resizeMode="cover"
+      />
+      {item.tag && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{item.tag}</Text>
         </View>
+      )}
+      {(item.time || item.readyInMinutes) && (
+        <View style={styles.timeBadge}>
+          <FontAwesome
+            name="clock-o"
+            size={10}
+            color="#f59e0b"
+            style={{ marginRight: 4 }}
+          />
+          <Text style={styles.timeText}>
+            {item.readyInMinutes ? `${item.readyInMinutes}m` : item.time}
+          </Text>
+        </View>
+      )}
+    </View>
+    <View style={styles.cardContent}>
+      <Text style={styles.cardTitle} numberOfLines={1}>
+        {item.title}
+      </Text>
+      <View style={styles.metaRow}>
+        <FontAwesome name="star" size={12} color="#f59e0b" />
+        <Text style={styles.ratingText}>{item.rating || "4.8"}</Text>
+        <Text style={styles.dot}>•</Text>
+        <Text style={styles.metaText}>Featured</Text>
       </View>
-    </TouchableOpacity>
-  );
+    </View>
+  </TouchableOpacity>
+);
 
   const renderVideoCard = ({ item }: { item: Video }) => (
     <TouchableOpacity
@@ -446,7 +484,135 @@ export default function TabOneScreen() {
             <FontAwesome name="sign-out" size={15} color="#ef4444" />
           </Pressable>
         </View>
+{/* In-App Recipe Detail Modal */}
+<Modal visible={recipeModalVisible} animationType="slide" transparent={false}>
+  <SafeAreaView style={styles.recipeModalContainer}>
+    <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+    
+    {/* Modal Header Controls */}
+    <View style={styles.recipeModalHeader}>
+      <Pressable 
+        style={styles.closeBtn} 
+        onPress={() => setRecipeModalVisible(false)}
+      >
+        <FontAwesome name="chevron-left" size={16} color="#f59e0b" />
+        <Text style={styles.closeBtnText}>Back</Text>
+      </Pressable>
+      
+      {selectedRecipe?.sourceUrl && (
+        <Pressable 
+          onPress={() => handleOpenLink(selectedRecipe.sourceUrl)}
+          style={styles.externalLinkBtn}
+        >
+          <FontAwesome name="external-link" size={14} color="#a1a1aa" />
+        </Pressable>
+      )}
+    </View>
 
+    {selectedRecipe && (
+      <ScrollView 
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Cover Image & Title */}
+        <Image 
+          source={{ uri: selectedRecipe.image }} 
+          style={styles.recipeModalImage} 
+        />
+        
+        <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+          <Text style={styles.recipeModalTitle}>{selectedRecipe.title}</Text>
+          
+          {/* Quick Metrics */}
+          <View style={styles.recipeMetaContainer}>
+            {selectedRecipe.readyInMinutes && (
+              <View style={styles.recipeMetaChip}>
+                <FontAwesome name="clock-o" size={12} color="#f59e0b" />
+                <Text style={styles.recipeMetaText}>
+                  {selectedRecipe.readyInMinutes} Mins
+                </Text>
+              </View>
+            )}
+            {selectedRecipe.servings && (
+              <View style={styles.recipeMetaChip}>
+                <FontAwesome name="user" size={12} color="#f59e0b" />
+                <Text style={styles.recipeMetaText}>
+                  {selectedRecipe.servings} Servings
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Ingredients Section */}
+          {selectedRecipe.extendedIngredients && 
+           selectedRecipe.extendedIngredients.length > 0 && (
+            <View style={styles.recipeSection}>
+              <View style={styles.titleRow}>
+                <View style={styles.amberAccentBar} />
+                <Text style={styles.sectionTitle}>Ingredients</Text>
+              </View>
+              {selectedRecipe.extendedIngredients.map((ing, idx) => (
+                <View key={ing.id || idx} style={styles.ingredientRow}>
+                  <FontAwesome name="circle" size={6} color="#f59e0b" style={{ marginRight: 10 }} />
+                  <Text style={styles.ingredientText}>{ing.original}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+{/* Preparation / Instructions Section */}
+<View style={styles.recipeSection}>
+  <View style={styles.titleRow}>
+    <View style={styles.amberAccentBar} />
+    <Text style={styles.sectionTitle}>Preparation Steps</Text>
+  </View>
+
+  {loadingDetails ? (
+    <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 20 }} />
+  ) : selectedRecipe?.analyzedInstructions &&
+    selectedRecipe.analyzedInstructions.length > 0 &&
+    selectedRecipe.analyzedInstructions[0].steps.length > 0 ? (
+    
+    /* Option 1: Structured Analyzed Steps */
+    selectedRecipe.analyzedInstructions[0].steps.map((step) => (
+      <View key={step.number} style={styles.stepRow}>
+        <View style={styles.stepNumberBadge}>
+          <Text style={styles.stepNumberText}>{step.number}</Text>
+        </View>
+        <Text style={styles.stepText}>{step.step}</Text>
+      </View>
+    ))
+  ) : selectedRecipe?.instructions ? (
+    
+    /* Option 2: Fallback to Raw Instructions Text (strip HTML tags) */
+    <Text style={styles.stepText}>
+      {selectedRecipe.instructions.replace(/<[^>]*>?/gm, "")}
+    </Text>
+  ) : (
+    
+    /* Option 3: Fallback Source Link */
+    <View>
+      <Text style={styles.stepText}>
+        Detailed step-by-step instructions are not directly available for this item.
+      </Text>
+      {selectedRecipe?.sourceUrl && (
+        <Pressable
+          style={{ marginTop: 10 }}
+          onPress={() => handleOpenLink(selectedRecipe.sourceUrl)}
+        >
+          <Text style={{ color: "#f59e0b", fontWeight: "600" }}>
+            View full recipe source →
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  )}
+</View>
+          
+        </View>
+      </ScrollView>
+    )}
+  </SafeAreaView>
+</Modal>
         {/* Quick Utility Tools Grid */}
         <View style={styles.utilityGrid}>
           <TouchableOpacity
@@ -1339,5 +1505,104 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
-  },
+  },// Recipe Modal Styles
+recipeModalContainer: {
+  flex: 1,
+  backgroundColor: "#0f1115",
+},
+recipeModalHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingHorizontal: 20,
+  paddingVertical: 14,
+  backgroundColor: "#181b20",
+  borderBottomWidth: 1,
+  borderBottomColor: "#27272a",
+},
+closeBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+},
+closeBtnText: {
+  color: "#f59e0b",
+  fontSize: 14,
+  fontWeight: "700",
+  marginLeft: 8,
+},
+externalLinkBtn: {
+  padding: 6,
+},
+recipeModalImage: {
+  width: "100%",
+  height: 220,
+},
+recipeModalTitle: {
+  fontSize: 20,
+  fontWeight: "800",
+  color: "#f4f4f5",
+  marginBottom: 12,
+},
+recipeMetaContainer: {
+  flexDirection: "row",
+  marginBottom: 20,
+},
+recipeMetaChip: {
+  flexDirection: "row",
+  alignItems: "center",
+  backgroundColor: "#181b20",
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 8,
+  marginRight: 10,
+  borderWidth: 1,
+  borderColor: "#27272a",
+},
+recipeMetaText: {
+  color: "#f4f4f5",
+  fontSize: 12,
+  fontWeight: "600",
+  marginLeft: 6,
+},
+recipeSection: {
+  marginTop: 16,
+  marginBottom: 12,
+},
+ingredientRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingVertical: 8,
+  borderBottomWidth: 1,
+  borderBottomColor: "#181b20",
+},
+ingredientText: {
+  color: "#d4d4d8",
+  fontSize: 13,
+},
+stepRow: {
+  flexDirection: "row",
+  marginBottom: 14,
+  alignItems: "flex-start",
+},
+stepNumberBadge: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  backgroundColor: "#f59e0b",
+  justifyContent: "center",
+  alignItems: "center",
+  marginRight: 12,
+  marginTop: 2,
+},
+stepNumberText: {
+  color: "#0f1115",
+  fontWeight: "800",
+  fontSize: 12,
+},
+stepText: {
+  flex: 1,
+  color: "#d4d4d8",
+  fontSize: 13,
+  lineHeight: 20,
+},
 });

@@ -13,10 +13,18 @@ function CustomDrawerContent(props: any) {
   const currentPath = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // User Profile State
+  const auth = getAuth();
+  const currentUser = auth.currentUser;
+  const userEmail = currentUser?.email || "Chef Guest";
+  // Extract display name from email or fall back to 'Chef'
+  const displayName = currentUser?.displayName || userEmail.split("@")[0];
+
+  // Placeholder state for future level system (Curriculum / Challenges)
+  const [chefLevel] = useState("Level 1 Chef");
+
   // Real-time listener for pending notifications / friend requests
   useEffect(() => {
-    const auth = getAuth();
-    const currentUser = auth.currentUser;
     if (!currentUser) return;
 
     const reqRef = collection(db, "users", currentUser.uid, "friendRequests");
@@ -31,7 +39,7 @@ function CustomDrawerContent(props: any) {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [currentUser]);
 
   const menuItems = [
     {
@@ -141,10 +149,15 @@ function CustomDrawerContent(props: any) {
             style={styles.avatar}
           />
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Chef Josh</Text>
+            <Text style={styles.profileName} numberOfLines={1}>
+              Chef {displayName}
+            </Text>
+            <Text style={styles.profileEmail} numberOfLines={1}>
+              {userEmail}
+            </Text>
             <View style={styles.badgePill}>
               <FontAwesome name="star" size={9} color="#f59e0b" />
-              <Text style={styles.badgeText}>Pro Home Chef</Text>
+              <Text style={styles.badgeText}>{chefLevel}</Text>
             </View>
           </View>
         </View>
@@ -291,13 +304,19 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   profileInfo: {
+    flex: 1,
     justifyContent: "center",
-    gap: 4,
+    gap: 2,
   },
   profileName: {
     fontSize: 15,
     fontWeight: "700",
     color: "#f4f4f5",
+  },
+  profileEmail: {
+    fontSize: 11,
+    color: "#a1a1aa",
+    marginBottom: 2,
   },
   badgePill: {
     flexDirection: "row",

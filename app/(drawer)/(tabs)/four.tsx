@@ -1,379 +1,302 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   View,
   Text,
-  useWindowDimensions,
-  FlatList,
-  Pressable,
-  Image,
   SafeAreaView,
   StatusBar,
-  Platform,
-  Alert,
-  Modal,
   ScrollView,
-  ViewToken,
+  Pressable,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+  TextInput,
 } from "react-native";
-import { Video, ResizeMode } from "expo-av";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
-interface RecipeStep {
-  stepNumber: number;
-  title: string;
-  instruction: string;
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-interface CulinaryMasterclassPost {
-  id: string;
-  chef: {
-    name: string;
-    role: string;
-    avatar: string;
-  };
-  videoUri: string;
-  title: string;
-  techniqueTag: string;
-  prepTime: string;
-  difficulty: "Beginner" | "Intermediate" | "Advanced" | "Master";
-  servings: string;
-  description: string;
-  ingredients: string[];
-  steps: RecipeStep[];
-  isSaved?: boolean;
-}
+type FilterCategory = "all" | "temps" | "techniques" | "soups" | "pans" | "libations";
 
-const CULINARY_POSTS: CulinaryMasterclassPost[] = [
-  {
-    id: "class_1",
-    chef: {
-      name: "Chef Marco Riva",
-      role: "Executive Chef & Butcher",
-      avatar:
-        "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200",
-    },
-    videoUri:
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    title: "Precision Sear & Butter Basting 45-Day Dry Aged Ribeye",
-    techniqueTag: "Proteins & Maillard Reaction",
-    prepTime: "25 mins",
-    difficulty: "Intermediate",
-    servings: "2 Portions",
-    description:
-      "Master high-heat cast iron searing, aromatics temperature control, and spoon-basting techniques for optimal internal edge-to-edge cooking.",
-    ingredients: [
-      "1x 16oz Dry-Aged Ribeye (1.5” thick)",
-      "4 tbsp Unsalted High-Fat Butter",
-      "3 sprigs Fresh Rosemary & Thyme",
-      "4 cloves Garlic (smashed)",
-      "Flaky Sea Salt & Coarse Black Pepper",
-    ],
-    steps: [
-      {
-        stepNumber: 1,
-        title: "Tempering & Surface Prep",
-        instruction:
-          "Bring beef to room temperature for 45 minutes. Thoroughly pat dry with paper towels to ensure crisp crust development.",
-      },
-      {
-        stepNumber: 2,
-        title: "High-Heat Thermal Sear",
-        instruction:
-          "Heat cast iron pan until wisps of smoke appear. Sear steak 2 minutes per side until deep mahogany crust forms.",
-      },
-      {
-        stepNumber: 3,
-        title: "Aromatic Butter Baste",
-        instruction:
-          "Reduce heat slightly. Add butter, garlic, and herbs. Tilt pan toward you and continuously spoon foaming butter over steak for 90 seconds.",
-      },
-    ],
-  },
-  {
-    id: "class_2",
-    chef: {
-      name: "Chef Elena Rossi",
-      role: "Pasta Specialist",
-      avatar:
-        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200",
-    },
-    videoUri:
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-    title: "Emulsion Mastery: Roman Cacio e Pepe from Scratch",
-    techniqueTag: "Starch-Fat Emulsification",
-    prepTime: "15 mins",
-    difficulty: "Advanced",
-    servings: "4 Portions",
-    description:
-      "Learn how to bind coarse Pecorino Romano and cracked black pepper using pasta starch water without clumping or breaking the cheese sauce.",
-    ingredients: [
-      "400g Tonnarelli or Spaghetti",
-      "200g Pecorino Romano (finely microplaned)",
-      "2 tbsp Whole Black Peppercorns (freshly cracked)",
-      "Reserved Starch Water (high temp)",
-    ],
-    steps: [
-      {
-        stepNumber: 1,
-        title: "Toast the Pepper",
-        instruction:
-          "Toast cracked peppercorns in a dry skillet over medium heat until fragrant (approx 1 minute). Add half a ladle of pasta water to stop toast.",
-      },
-      {
-        stepNumber: 2,
-        title: "Pecorino Paste Creation",
-        instruction:
-          "In a bowl, mix microplaned cheese with warm pasta water using a whisk until a smooth, thick paste forms.",
-      },
-      {
-        stepNumber: 3,
-        title: "Off-Heat Emulsification",
-        instruction:
-          "Transfer al dente pasta to skillet off direct heat. Stir in cheese paste rapidly, tossing continuously to build a glossy, velvety emulsion.",
-      },
-    ],
-  },
-];
+export default function KitchenToolsScreen() {
+  const [activeTab, setActiveTab] = useState<FilterCategory>("all");
 
-export default function CulinaryLearningFeedScreen() {
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  // Accordion States
+  const [showScaler, setShowScaler] = useState(true);
+  const [showOrderOps, setShowOrderOps] = useState(false);
+  const [showSoupArch, setShowSoupArch] = useState(true);
+  const [showHotelPans, setShowHotelPans] = useState(true);
+  const [showCookware, setShowCookware] = useState(false);
+  const [showProteinRef, setShowProteinRef] = useState(false);
+  const [showCulinaryRef, setShowCulinaryRef] = useState(false);
+  const [showBeerRef, setShowBeerRef] = useState(false);
+  const [showWineRef, setShowWineRef] = useState(false);
 
-  const [posts, setPosts] = useState<CulinaryMasterclassPost[]>(CULINARY_POSTS);
-  const [activeVideoIndex, setActiveVideoIndex] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
-  const [selectedRecipe, setSelectedRecipe] = useState<CulinaryMasterclassPost | null>(null);
+  // Scaler State
+  const [baseQty, setBaseQty] = useState("100");
+  const [multiplier, setMultiplier] = useState(2);
 
-  // Autoplay handler on scroll
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-        setActiveVideoIndex(viewableItems[0].index);
-      }
-    }
-  ).current;
-
-  const viewabilityConfig = useMemo(
-    () => ({ itemVisiblePercentThreshold: 80 }),
-    []
-  );
-
-  const toggleSave = (id: string) => {
-    setPosts((prevPosts) =>
-      prevPosts.map((post) => {
-        if (post.id === id) {
-          return { ...post, isSaved: !post.isSaved };
-        }
-        return post;
-      })
-    );
+  const toggleSection = (section: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (section === "scaler") setShowScaler(!showScaler);
+    if (section === "order") setShowOrderOps(!showOrderOps);
+    if (section === "soup") setShowSoupArch(!showSoupArch);
+    if (section === "hotelPans") setShowHotelPans(!showHotelPans);
+    if (section === "cookware") setShowCookware(!showCookware);
+    if (section === "protein") setShowProteinRef(!showProteinRef);
+    if (section === "culinary") setShowCulinaryRef(!showCulinaryRef);
+    if (section === "beer") setShowBeerRef(!showBeerRef);
+    if (section === "wine") setShowWineRef(!showWineRef);
   };
 
-  const renderMasterclassItem = ({
-    item,
-    index,
-  }: {
-    item: CulinaryMasterclassPost;
-    index: number;
-  }) => {
-    const isPlaying = index === activeVideoIndex;
+  const calculateScaled = () => {
+    const val = parseFloat(baseQty);
+    if (isNaN(val)) return 0;
+    return (val * multiplier).toFixed(1).replace(/\.0$/, "");
+  };
 
-    return (
-      <View style={[styles.cardContainer, { width: screenWidth, height: screenHeight }]}>
-        {/* Fullscreen Video Background */}
-        <Video
-          style={[styles.videoPlayer, { width: screenWidth, height: screenHeight }]}
-          source={{ uri: item.videoUri }}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay={isPlaying}
-          isLooping
-          isMuted={isMuted}
-        />
-
-        {/* Global Sound Control */}
-        <Pressable
-          style={styles.muteButton}
-          onPress={() => setIsMuted((prev) => !prev)}
-        >
-          <FontAwesome
-            name={isMuted ? "volume-off" : "volume-up"}
-            size={14}
-            color="#f4f4f5"
-          />
-        </Pressable>
-
-        {/* Right Chef Tools Action Bar */}
-        <View style={styles.rightActions}>
-          {/* Chef Profile Badge */}
-          <View style={styles.avatarActionContainer}>
-            <Image source={{ uri: item.chef.avatar }} style={styles.userAvatar} />
-            <View style={styles.proBadge}>
-              <Text style={styles.proBadgeText}>PRO</Text>
-            </View>
-          </View>
-
-          {/* Open Recipe Sheet Button */}
-          <Pressable
-            style={styles.actionButton}
-            onPress={() => setSelectedRecipe(item)}
-          >
-            <View style={styles.iconCircle}>
-              <FontAwesome name="book" size={20} color="#f59e0b" />
-            </View>
-            <Text style={styles.actionText}>Recipe</Text>
-          </Pressable>
-
-          {/* Save / Bookmark Button */}
-          <Pressable
-            style={styles.actionButton}
-            onPress={() => toggleSave(item.id)}
-          >
-            <View style={styles.iconCircle}>
-              <FontAwesome
-                name={item.isSaved ? "bookmark" : "bookmark-o"}
-                size={20}
-                color={item.isSaved ? "#f59e0b" : "#f4f4f5"}
-              />
-            </View>
-            <Text style={styles.actionText}>{item.isSaved ? "Saved" : "Save"}</Text>
-          </Pressable>
-
-          {/* Share Masterclass Button */}
-          <Pressable
-            style={styles.actionButton}
-            onPress={() => Alert.alert("Share Class", "Link copied to clipboard.")}
-          >
-            <View style={styles.iconCircle}>
-              <FontAwesome name="share-alt" size={20} color="#f4f4f5" />
-            </View>
-            <Text style={styles.actionText}>Share</Text>
-          </Pressable>
-        </View>
-
-        {/* Bottom Overlay: Kitchen Specs & Quick Launch */}
-        <View style={styles.bottomOverlay}>
-          {/* Technique Tag */}
-          <View style={styles.tagBadge}>
-            <Text style={styles.tagBadgeText}>{item.techniqueTag}</Text>
-          </View>
-
-          {/* Video Title */}
-          <Text style={styles.classTitle}>{item.title}</Text>
-
-          {/* Chef Metadata */}
-          <View style={styles.chefRow}>
-            <Text style={styles.chefName}>{item.chef.name}</Text>
-            <Text style={styles.chefRole}>• {item.chef.role}</Text>
-          </View>
-
-          {/* Operational Quick Specs */}
-          <View style={styles.specsRow}>
-            <View style={styles.specChip}>
-              <FontAwesome name="clock-o" size={12} color="#f59e0b" />
-              <Text style={styles.specText}>{item.prepTime}</Text>
-            </View>
-            <View style={styles.specChip}>
-              <FontAwesome name="bar-chart" size={12} color="#f59e0b" />
-              <Text style={styles.specText}>{item.difficulty}</Text>
-            </View>
-            <View style={styles.specChip}>
-              <FontAwesome name="cutlery" size={12} color="#f59e0b" />
-              <Text style={styles.specText}>{item.servings}</Text>
-            </View>
-          </View>
-
-          {/* Recipe Card Call-To-Action */}
-          <Pressable
-            style={styles.viewRecipeButton}
-            onPress={() => setSelectedRecipe(item)}
-          >
-            <FontAwesome name="list-alt" size={14} color="#0f1115" />
-            <Text style={styles.viewRecipeButtonText}>View Prep & Technique Sheet</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
+  const isTabVisible = (cat: FilterCategory) => {
+    return activeTab === "all" || activeTab === cat;
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
-
-      {/* Floating Header */}
-      <View style={styles.topHeader}>
-        <Text style={styles.headerTitle}>Culinary Academy</Text>
-        <View style={styles.headerSubTabContainer}>
-          <Text style={[styles.subTabText, styles.activeSubTab]}>Techniques</Text>
-          <Text style={styles.subTabDot}>•</Text>
-          <Text style={styles.subTabText}>Masterclasses</Text>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>
+            Kitchen Command & Tools<Text style={styles.brandDot}>.</Text>
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            Hotel pan dimensions, volume capacity, batch scaling, and station flow
+          </Text>
         </View>
-      </View>
 
-      {/* Vertical Snap Autoplay Feed */}
-      <FlatList
-        data={posts}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMasterclassItem}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        snapToInterval={screenHeight}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        removeClippedSubviews={Platform.OS === "android"}
-      />
-
-      {/* Culinary Recipe / Method Modal Sheet */}
-      <Modal
-        visible={!!selectedRecipe}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setSelectedRecipe(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTag}>{selectedRecipe?.techniqueTag}</Text>
-                <Text style={styles.modalTitle}>{selectedRecipe?.title}</Text>
-              </View>
-              <Pressable
-                style={styles.closeButton}
-                onPress={() => setSelectedRecipe(null)}
-              >
-                <FontAwesome name="times" size={18} color="#f4f4f5" />
-              </Pressable>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollBody}
+        {/* Filter Navigation Tabs */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar}>
+          {[
+            { id: "all", label: "All Tools" },
+            { id: "pans", label: "Hotel Pans & Sizing" },
+            { id: "soups", label: "Soups & Starches" },
+            { id: "techniques", label: "Technique & Flow" },
+            { id: "temps", label: "Protein Temps" },
+            { id: "libations", label: "Beer & Wine" },
+          ].map((tab) => (
+            <Pressable
+              key={tab.id}
+              style={[styles.tabItem, activeTab === tab.id && styles.tabItemActive]}
+              onPress={() => setActiveTab(tab.id as FilterCategory)}
             >
-              <Text style={styles.sectionHeader}>Overview</Text>
-              <Text style={styles.descriptionText}>{selectedRecipe?.description}</Text>
+              <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
 
-              <Text style={styles.sectionHeader}>Mise en Place (Ingredients)</Text>
-              {selectedRecipe?.ingredients.map((item, idx) => (
-                <View key={`ing-${idx}`} style={styles.ingredientRow}>
-                  <View style={styles.bulletPoint} />
-                  <Text style={styles.ingredientText}>{item}</Text>
-                </View>
-              ))}
+        {/* NEW SECTION: Commercial Hotel Pan Matrix */}
+        {isTabVisible("pans") && (
+          <View style={styles.card}>
+            <Pressable style={styles.accordionHeader} onPress={() => toggleSection("hotelPans")}>
+              <View style={styles.cardHeader}>
+                <MaterialCommunityIcons name="grid-large" size={20} color="#f59e0b" />
+                <Text style={styles.cardTitle}>Hotel Pan Sizes & Depth Guide</Text>
+              </View>
+              <FontAwesome name={showHotelPans ? "chevron-up" : "chevron-down"} size={14} color="#a1a1aa" />
+            </Pressable>
 
-              <Text style={styles.sectionHeader}>Technique Execution Steps</Text>
-              {selectedRecipe?.steps.map((step) => (
-                <View key={`step-${step.stepNumber}`} style={styles.stepCard}>
-                  <View style={styles.stepHeaderRow}>
-                    <Text style={styles.stepNumberBadge}>STEP {step.stepNumber}</Text>
-                    <Text style={styles.stepTitle}>{step.title}</Text>
-                  </View>
-                  <Text style={styles.stepInstruction}>{step.instruction}</Text>
+            {showHotelPans && (
+              <View style={styles.accordionBody}>
+                <Text style={styles.helperText}>
+                  Standard gastro-norm / steam table dimensions, 200–600 depth codes, and volumetric capacity.
+                </Text>
+
+                <Text style={styles.sectionSubHeader}>Depth Designation Codes</Text>
+                <View style={styles.referenceRow}>
+                  <Text style={styles.refLabel}>200 Series (2" / 65mm)</Text>
+                  <Text style={styles.refValue}>Shallow. Roasting, flat steam tables, display.</Text>
                 </View>
-              ))}
-            </ScrollView>
+                <View style={styles.referenceRow}>
+                  <Text style={styles.refLabel}>400 Series (4" / 100mm)</Text>
+                  <Text style={styles.refValue}>Standard depth. Sauces, proteins, general holding.</Text>
+                </View>
+                <View style={styles.referenceRow}>
+                  <Text style={styles.refLabel}>600 Series (6" / 150mm)</Text>
+                  <Text style={styles.refValue}>Deep storage. Soups, stocks, high-volume prep.</Text>
+                </View>
+
+                <Text style={styles.sectionSubHeader}>Pan Fraction & Volume Reference</Text>
+
+                <View style={styles.refBlock}>
+                  <Text style={styles.refBlockTitle}>Full Size (1/1) — 12" × 20"</Text>
+                  <Text style={styles.refBlockText}>
+                    • 200 (2.5"): ~8.5 Quarts / 8 Liters{"\n"}
+                    • 400 (4.0"): ~14.5 Quarts / 13.7 Liters{"\n"}
+                    • 600 (6.0"): ~21.0 Quarts / 20 Liters
+                  </Text>
+                </View>
+
+                <View style={styles.refBlock}>
+                  <Text style={styles.refBlockTitle}>Half Size (1/2) — 12" × 10"</Text>
+                  <Text style={styles.refBlockText}>
+                    • 200 (2.5"): ~4.3 Quarts{"\n"}
+                    • 400 (4.0"): ~7.0 Quarts{"\n"}
+                    • 600 (6.0"): ~10.5 Quarts
+                  </Text>
+                </View>
+
+                <View style={styles.refBlock}>
+                  <Text style={styles.refBlockTitle}>Third Size (1/3) — 12" × 6.6"</Text>
+                  <Text style={styles.refBlockText}>
+                    • 200 (2.5"): ~2.5 Quarts{"\n"}
+                    • 400 (4.0"): ~4.0 Quarts{"\n"}
+                    • 600 (6.0"): ~6.0 Quarts (Ideal for soup wells)
+                  </Text>
+                </View>
+
+                <View style={styles.refBlock}>
+                  <Text style={styles.refBlockTitle}>Sixth Size (1/6) — 6.9" × 6.3"</Text>
+                  <Text style={styles.refBlockText}>
+                    • 200 (2.5"): ~1.1 Quarts{"\n"}
+                    • 400 (4.0"): ~1.8 Quarts{"\n"}
+                    • 600 (6.0"): ~2.7 Quarts (Standard line cold-rail)
+                  </Text>
+                </View>
+
+                <View style={styles.refBlock}>
+                  <Text style={styles.refBlockTitle}>Ninth Size (1/9) — 6.9" × 4.2"</Text>
+                  <Text style={styles.refBlockText}>
+                    • 200 (2.5"): ~0.6 Quarts{"\n"}
+                    • 400 (4.0"): ~1.0 Quart (Garnishes, finishing herbs)
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
-        </View>
-      </Modal>
+        )}
+
+        {/* TOOL: Soup Architecture & Starch Upgrades */}
+        {isTabVisible("soups") && (
+          <View style={styles.card}>
+            <Pressable style={styles.accordionHeader} onPress={() => toggleSection("soup")}>
+              <View style={styles.cardHeader}>
+                {/* FIXED ICON: Replaced "soup" with "pot-steam" */}
+                <MaterialCommunityIcons name="pot-steam" size={20} color="#f59e0b" />
+                <Text style={styles.cardTitle}>Soup Architecture & Starch Hacks</Text>
+              </View>
+              <FontAwesome name={showSoupArch ? "chevron-up" : "chevron-down"} size={14} color="#a1a1aa" />
+            </Pressable>
+
+            {showSoupArch && (
+              <View style={styles.accordionBody}>
+                <Text style={styles.sectionSubHeader}>Soup = Liquid Base + Body Agent</Text>
+                
+                <View style={styles.refBlock}>
+                  <Text style={styles.refBlockTitle}>Clear Broths & Consommés</Text>
+                  <Text style={styles.refBlockText}>
+                    100% Seasoned Stock/Water base. Clarified using egg-white rafts. Clean, light, high protein extraction.
+                  </Text>
+                </View>
+
+                <View style={styles.refBlock}>
+                  <Text style={styles.refBlockTitle}>Cream & Chowder Base</Text>
+                  <Text style={styles.refBlockText}>
+                    Stock + Dairy bound with Roux or potato starch. Avoid vigorous boiling after dairy addition.
+                  </Text>
+                </View>
+
+                <View style={styles.refBlock}>
+                  <Text style={styles.refBlockTitle}>Puree & Starch-Bound Soups</Text>
+                  <Text style={styles.refBlockText}>
+                    Roasted veggies blended directly with hot stock. Natural starches create body without added flour.
+                  </Text>
+                </View>
+
+                <Text style={styles.sectionSubHeader}>Pro Starch Quick-Upgrades</Text>
+                
+                {/* FIXED FLEX LAYOUT PREVENTING SQUEEZED VERTICAL TEXT */}
+                <View style={styles.referenceRow}>
+                  <Text style={styles.refLabel}>Boursin Garlic & Herb Mash</Text>
+                  <Text style={styles.refValue}>Fold 1 puck Boursin into hot riced potatoes</Text>
+                </View>
+
+                <View style={styles.referenceRow}>
+                  <Text style={styles.refLabel}>Steamed Herb & Citrus Rice</Text>
+                  <Text style={styles.refValue}>Fold chopped parsley, cilantro & lemon zest into warm rice</Text>
+                </View>
+
+                <View style={styles.referenceRow}>
+                  <Text style={styles.refLabel}>Crispy Potato Starch Coating</Text>
+                  <Text style={styles.refValue}>Dust protein in potato starch for ultra-shatter crust</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* TOOL: Interactive Recipe Scaler */}
+        {isTabVisible("techniques") && (
+          <View style={styles.card}>
+            <Pressable style={styles.accordionHeader} onPress={() => toggleSection("scaler")}>
+              <View style={styles.cardHeader}>
+                <MaterialCommunityIcons name="calculator" size={20} color="#f59e0b" />
+                <Text style={styles.cardTitle}>Live Recipe & Batch Scaler</Text>
+              </View>
+              <FontAwesome name={showScaler ? "chevron-up" : "chevron-down"} size={14} color="#a1a1aa" />
+            </Pressable>
+
+            {showScaler && (
+              <View style={styles.accordionBody}>
+                <Text style={styles.helperText}>Quickly scale weights (grams, oz) for service or batch prep.</Text>
+                
+                <View style={styles.scalerRow}>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Base Weight (g / oz)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      keyboardType="numeric"
+                      value={baseQty}
+                      onChangeText={setBaseQty}
+                      placeholder="100"
+                      placeholderTextColor="#52525b"
+                    />
+                  </View>
+
+                  <Text style={styles.multiplierSymbol}>×</Text>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Batch Target</Text>
+                    <View style={styles.multiplierPills}>
+                      {[0.5, 1, 2, 3, 5].map((m) => (
+                        <Pressable
+                          key={m}
+                          style={[styles.mPill, multiplier === m && styles.mPillActive]}
+                          onPress={() => setMultiplier(m)}
+                        >
+                          <Text style={[styles.mPillText, multiplier === m && styles.mPillTextActive]}>
+                            {m}x
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.scaledResultBox}>
+                  <Text style={styles.scaledResultLabel}>Scaled Quantity Required:</Text>
+                  <Text style={styles.scaledResultVal}>{calculateScaled()} units</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -383,311 +306,207 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0f1115",
   },
-
-  // Top Navigation Header
-  topHeader: {
-    position: "absolute",
-    top: Platform.OS === "ios" ? 50 : 20,
-    left: 0,
-    right: 0,
-    zIndex: 30,
-    alignItems: "center",
+  container: {
+    padding: 20,
+    paddingBottom: 50,
+  },
+  header: {
+    marginBottom: 16,
   },
   headerTitle: {
-    color: "#f59e0b",
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1.5,
-    marginBottom: 2,
-  },
-  headerSubTabContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  subTabText: {
-    color: "#71717a",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  activeSubTab: {
-    color: "#f4f4f5",
-    fontWeight: "700",
-  },
-  subTabDot: {
-    color: "#52525b",
-    marginHorizontal: 8,
-  },
-
-  // Screen/Card layout
-  cardContainer: {
-    backgroundColor: "#0f1115",
-    position: "relative",
-    justifyContent: "center",
-  },
-  videoPlayer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    bottom: 0,
-    right: 0,
-  },
-
-  // Mute Toggle
-  muteButton: {
-    position: "absolute",
-    top: Platform.OS === "ios" ? 100 : 70,
-    right: 16,
-    zIndex: 25,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(24, 27, 32, 0.85)",
-    borderWidth: 1,
-    borderColor: "#27272a",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  // Right Side Chef Controls
-  rightActions: {
-    position: "absolute",
-    right: 14,
-    bottom: 110,
-    zIndex: 20,
-    alignItems: "center",
-  },
-  avatarActionContainer: {
-    position: "relative",
-    marginBottom: 20,
-  },
-  userAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: "#f59e0b",
-    backgroundColor: "#181b20",
-  },
-  proBadge: {
-    position: "absolute",
-    bottom: -6,
-    alignSelf: "center",
-    backgroundColor: "#f59e0b",
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  proBadgeText: {
-    color: "#0f1115",
-    fontSize: 8,
+    fontSize: 22,
     fontWeight: "800",
-  },
-  actionButton: {
-    alignItems: "center",
-    marginBottom: 18,
-  },
-  iconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "rgba(24, 27, 32, 0.85)",
-    borderWidth: 1,
-    borderColor: "#27272a",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  actionText: {
     color: "#f4f4f5",
-    fontSize: 10,
-    fontWeight: "600",
-    marginTop: 4,
   },
-
-  // Bottom Details
-  bottomOverlay: {
-    position: "absolute",
-    bottom: 30,
-    left: 16,
-    right: 80,
-    zIndex: 20,
-  },
-  tagBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(15, 17, 21, 0.9)",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 0.5,
-    borderColor: "#f59e0b",
-    marginBottom: 8,
-  },
-  tagBadgeText: {
+  brandDot: {
     color: "#f59e0b",
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
   },
-  classTitle: {
-    color: "#f4f4f5",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22,
-    marginBottom: 4,
-  },
-  chefRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  chefName: {
-    color: "#f59e0b",
+  headerSubtitle: {
     fontSize: 12,
-    fontWeight: "600",
-  },
-  chefRole: {
     color: "#a1a1aa",
-    fontSize: 12,
-    marginLeft: 4,
+    marginTop: 4,
+    lineHeight: 16,
   },
-  specsRow: {
+  tabBar: {
+    marginBottom: 18,
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
   },
-  specChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(24, 27, 32, 0.85)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 6,
-    borderWidth: 0.5,
-    borderColor: "#27272a",
-  },
-  specText: {
-    color: "#f4f4f5",
-    fontSize: 11,
-    fontWeight: "600",
-    marginLeft: 5,
-  },
-  viewRecipeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f59e0b",
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  viewRecipeButtonText: {
-    color: "#0f1115",
-    fontSize: 12,
-    fontWeight: "700",
-    marginLeft: 8,
-  },
-
-  // Modal / Recipe Sheet
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#0f1115",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
-    padding: 20,
+  tabItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#181b20",
     borderWidth: 1,
     borderColor: "#27272a",
+    marginRight: 8,
   },
-  modalHeader: {
+  tabItemActive: {
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    borderColor: "#f59e0b",
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#a1a1aa",
+  },
+  tabTextActive: {
+    color: "#f59e0b",
+    fontWeight: "700",
+  },
+  card: {
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#f4f4f5",
+  },
+  accordionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#181b20",
+    alignItems: "center",
   },
-  modalTag: {
-    color: "#f59e0b",
+  accordionBody: {
+    marginTop: 12,
+  },
+  helperText: {
+    fontSize: 12,
+    color: "#a1a1aa",
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  scalerRow: {
+    gap: 12,
+  },
+  inputGroup: {
+    flex: 1,
+  },
+  inputLabel: {
     fontSize: 11,
     fontWeight: "700",
+    color: "#71717a",
+    marginBottom: 6,
     textTransform: "uppercase",
   },
-  modalTitle: {
+  textInput: {
+    backgroundColor: "#0f1115",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    borderRadius: 8,
+    padding: 10,
     color: "#f4f4f5",
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "700",
-    marginTop: 2,
-    maxWidth: 260,
   },
-  closeButton: {
-    backgroundColor: "#181b20",
-    padding: 8,
-    borderRadius: 16,
-  },
-  modalScrollBody: {
-    paddingVertical: 16,
-  },
-  sectionHeader: {
+  multiplierSymbol: {
+    fontSize: 18,
+    fontWeight: "800",
     color: "#f59e0b",
-    fontSize: 13,
+    alignSelf: "center",
+  },
+  multiplierPills: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  mPill: {
+    flex: 1,
+    backgroundColor: "#0f1115",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  mPillActive: {
+    backgroundColor: "#f59e0b",
+    borderColor: "#f59e0b",
+  },
+  mPillText: {
+    fontSize: 12,
     fontWeight: "700",
+    color: "#a1a1aa",
+  },
+  mPillTextActive: {
+    color: "#0f1115",
+  },
+  scaledResultBox: {
+    backgroundColor: "#0f1115",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.3)",
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  scaledResultLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#e4e4e7",
+  },
+  scaledResultVal: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#f59e0b",
+  },
+  sectionSubHeader: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#f59e0b",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginTop: 12,
     marginBottom: 8,
   },
-  descriptionText: {
-    color: "#a1a1aa",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  ingredientRow: {
+  referenceRow: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 6,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#27272a",
+    gap: 12,
   },
-  bulletPoint: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: "#f59e0b",
-    marginRight: 10,
+  refLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#e4e4e7",
+    flex: 1, // FIXED FLEX TO PREVENT 1-CHAR VERTICAL TEXT
   },
-  ingredientText: {
-    color: "#f4f4f5",
-    fontSize: 13,
+  refValue: {
+    fontSize: 12,
+    color: "#a1a1aa",
+    flex: 1.5, // GIVES ADEQUATE SPACE TO LONG DESCRIPTION TEXT
+    textAlign: "right",
   },
-  stepCard: {
-    backgroundColor: "#181b20",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 10,
+  refBlock: {
+    backgroundColor: "#0f1115",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: "#27272a",
   },
-  stepHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  stepNumberBadge: {
-    color: "#f59e0b",
-    fontSize: 10,
-    fontWeight: "800",
-    marginRight: 8,
-  },
-  stepTitle: {
-    color: "#f4f4f5",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  stepInstruction: {
-    color: "#a1a1aa",
+  refBlockTitle: {
     fontSize: 12,
-    lineHeight: 17,
+    fontWeight: "700",
+    color: "#f4f4f5",
+  },
+  refBlockText: {
+    fontSize: 11,
+    color: "#a1a1aa",
+    marginTop: 3,
+    lineHeight: 16,
   },
 });
