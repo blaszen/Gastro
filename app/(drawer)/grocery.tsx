@@ -27,6 +27,7 @@ import {
   doc,
   query,
   orderBy,
+  where,
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
@@ -47,9 +48,16 @@ export default function GroceryModal() {
 
   // 1. REAL-TIME LISTENER
   useEffect(() => {
-    // Query items sorted by creation time
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
+
+    // Each user's own items, newest first
     const q = query(
       collection(db, "groceryItems"),
+      where("createdBy", "==", uid),
       orderBy("createdAt", "desc")
     );
 
@@ -87,7 +95,7 @@ export default function GroceryModal() {
 
   // 3. ADD NEW ITEM
   const addItem = async () => {
-    if (!newItemText.trim()) return;
+    if (!newItemText.trim() || !auth.currentUser) return;
 
     const textToAdd = newItemText.trim();
     setNewItemText(""); // Clear input immediately for snappy UI
@@ -96,7 +104,7 @@ export default function GroceryModal() {
       await addDoc(collection(db, "groceryItems"), {
         name: textToAdd,
         checked: false,
-        createdBy: auth.currentUser?.uid || "anonymous",
+        createdBy: auth.currentUser.uid,
         createdAt: serverTimestamp(),
       });
     } catch (err) {
