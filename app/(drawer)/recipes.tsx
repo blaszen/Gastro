@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { MaterialCommunityIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
 import { db, auth } from "../../lib/firebase";
+import ScreenHeader from "../../components/ScreenHeader";
 
 export default function RecipesModal() {
   const [recipes, setRecipes] = useState<any[]>([]);
@@ -160,18 +161,10 @@ export default function RecipesModal() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
 
-      {/* Top Action Bar with Close Button */}
-      <View style={styles.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.closeBtn,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons name="close" size={20} color="#a1a1aa" />
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="My Recipes"
+        subtitle="Manage your personal and published dishes"
+      />
 
       <FlatList
         data={recipes}
@@ -179,16 +172,6 @@ export default function RecipesModal() {
         renderItem={renderRecipeCard}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>
-              My Recipes<Text style={styles.brandDot}>.</Text>
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              Manage your personal and published dishes
-            </Text>
-          </View>
-        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconBg}>

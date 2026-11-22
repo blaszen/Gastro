@@ -111,6 +111,19 @@ export default function Login() {
               />
             </View>
 
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.forgotLink}
+              onPress={() =>
+                router.push({
+                  pathname: "/auth/forgot-password",
+                  params: email.trim() ? { email: email.trim() } : {},
+                })
+              }
+            >
+              <Text style={styles.forgotLinkText}>Forgot password?</Text>
+            </TouchableOpacity>
+
             {error ? (
               <View style={styles.errorContainer}>
                 <Feather name="alert-circle" size={14} color="#ef4444" />
@@ -270,6 +283,18 @@ const styles = StyleSheet.create({
     height: 50,
     color: "#f8fafc",
     fontSize: 15,
+  },
+
+  forgotLink: {
+    alignSelf: "flex-end",
+    marginTop: -4,
+    marginBottom: 14,
+    paddingVertical: 2,
+  },
+  forgotLinkText: {
+    color: "#f59e0b",
+    fontSize: 13,
+    fontWeight: "600",
   },
 
   /* Errors */

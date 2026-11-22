@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { router } from "expo-router";
+import ScreenHeader from "../../components/ScreenHeader";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -164,20 +165,7 @@ export default function MasterclassLibraryScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Top Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <FontAwesome name="chevron-left" size={14} color="#f4f4f5" />
-        </TouchableOpacity>
-        <View>
-          <Text style={styles.headerTitle}>Techniques & Masterclasses</Text>
-          <Text style={styles.headerSubtitle}>The French Chef Curriculum</Text>
-        </View>
-        <View style={{ width: 36 }} />
-      </View>
+      <ScreenHeader title="Masterclasses" subtitle="The French Chef Curriculum" />
 
       {/* Category Pills */}
       <View style={styles.categoryContainer}>

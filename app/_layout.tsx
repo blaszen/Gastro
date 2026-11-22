@@ -95,6 +95,7 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
             {/* Auth screens */}
             <Stack.Screen name="auth/login" />
             <Stack.Screen name="auth/register" />
+            <Stack.Screen name="auth/forgot-password" />
 
             {/* Fallback screen */}
             <Stack.Screen name="+not-found" options={{ title: "Oops!" }} />

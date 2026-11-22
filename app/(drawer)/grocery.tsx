@@ -32,6 +32,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
+import ScreenHeader from "../../components/ScreenHeader";
 
 interface GroceryItem {
   id: string;
@@ -151,26 +152,10 @@ export default function GroceryModal() {
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>
-              Prep & Grocery<Text style={styles.brandDot}>.</Text>
-            </Text>
-            <Text style={styles.subtitle}>
-              {completedCount} of {items.length} items acquired
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.closeBtn,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons name="close" size={20} color="#a1a1aa" />
-          </Pressable>
-        </View>
+        <ScreenHeader
+          title="Prep & Grocery"
+          subtitle={`${completedCount} of ${items.length} items acquired`}
+        />
 
         {/* Progress Tracker */}
         {items.length > 0 && (
