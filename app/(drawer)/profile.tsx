@@ -29,6 +29,7 @@ import {
 } from "firebase/firestore";
 import * as ImagePicker from "expo-image-picker";
 import { db } from "../../lib/firebase";
+import ScreenHeader from "../../components/ScreenHeader";
 
 interface FriendUser {
   uid: string;
@@ -299,11 +300,8 @@ export default function ProfileModal() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <ScreenHeader title="My Profile" />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Close Button */}
-        <Pressable onPress={() => router.back()} style={styles.closeBtn}>
-          <FontAwesome name="times" size={18} color="#a1a1aa" />
-        </Pressable>
 
         {/* Profile Header */}
         <View style={styles.profileHeader}>

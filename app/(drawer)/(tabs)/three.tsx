@@ -28,7 +28,8 @@ export default function TabThreeScreen({ route, navigation }: any) {
   const [ingredients, setIngredients] = useState("");
   const [instructions, setInstructions] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  const [isPublic, setIsPublic] = useState(false);
+  // New recipes are public (shown in the Community Feed) unless marked private.
+  const [isPublic, setIsPublic] = useState(true);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export default function TabThreeScreen({ route, navigation }: any) {
       );
       setInstructions(existingRecipe.instructions || "");
       setImageUrl(existingRecipe.imageUrl || "");
-      setIsPublic(existingRecipe.isPublic ?? false);
+      setIsPublic(existingRecipe.isPublic ?? true);
     }
   }, [existingRecipe]);
 
@@ -129,7 +130,7 @@ export default function TabThreeScreen({ route, navigation }: any) {
     setIngredients("");
     setInstructions("");
     setImageUrl("");
-    setIsPublic(false);
+    setIsPublic(true);
   };
 
   return (
@@ -196,16 +197,17 @@ export default function TabThreeScreen({ route, navigation }: any) {
                 </View>
                 <Text style={styles.visibilitySub}>
                   {isPublic
-                    ? "Visible to everyone in the public feed"
+                    ? "Shared to the Community Feed. Switch on to keep it private."
                     : "Only visible on your personal account"}
                 </Text>
               </View>
               <Switch
+                accessibilityLabel="Private recipe"
                 trackColor={{ false: "#27272a", true: "#f59e0b" }}
-                thumbColor={isPublic ? "#0f1115" : "#71717a"}
+                thumbColor={isPublic ? "#71717a" : "#0f1115"}
                 ios_backgroundColor="#27272a"
-                onValueChange={setIsPublic}
-                value={isPublic}
+                onValueChange={(makePrivate) => setIsPublic(!makePrivate)}
+                value={!isPublic}
               />
             </View>
 

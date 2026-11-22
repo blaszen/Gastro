@@ -39,3 +39,19 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# firebase functions
+functions/lib/
+functions/node_modules/
+.env*
+!.env.example
+
+# firebase CLI debug logs can contain request bodies (including secrets)
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+
+# never commit or upload API keys
+key.txt
+*.key.txt

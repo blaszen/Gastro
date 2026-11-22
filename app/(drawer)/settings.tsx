@@ -14,6 +14,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
 import { auth } from "../../lib/firebase";
+import ScreenHeader from "../../components/ScreenHeader";
 
 export default function SettingsModal() {
   const router = useRouter();
@@ -46,15 +47,8 @@ const handleLogout = async () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <ScreenHeader title="Settings" onBack={handleBack} />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable onPress={handleBack} style={styles.backBtn}>
-            <FontAwesome name="arrow-left" size={16} color="#f4f4f5" />
-          </Pressable>
-          <Text style={styles.title}>Settings</Text>
-          <View style={styles.headerSpacer} />
-        </View>
 
         {/* Account Section */}
         <View style={styles.section}>

@@ -239,6 +239,7 @@ export default function TabOneScreen() {
   const [recipeResults, setRecipeResults] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(false);
   const [noResults, setNoResults] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [totalResults, setTotalResults] = useState(0);
   const [offset, setOffset] = useState(0);
 
@@ -325,6 +326,7 @@ export default function TabOneScreen() {
 
     const newOffset = newSearch ? 0 : offset;
     const data = await searchRecipes(search, newOffset);
+    setSearchError(data?.error || null);
 
     if (!data?.results || data.results.length === 0) {
       setNoResults(true);
@@ -771,7 +773,10 @@ export default function TabOneScreen() {
         {!loading && noResults && (
           <View style={styles.emptyContainer}>
             <FontAwesome name="search-minus" size={28} color="#3f3f46" />
-            <Text style={styles.emptyText}>No creations found</Text>
+            <Text style={styles.emptyText}>{searchError ? "Search unavailable" : "No creations found"}</Text>
+            {searchError ? (
+              <Text style={[styles.emptyText, { fontSize: 12, marginTop: 4, textAlign: "center" }]}>{searchError}</Text>
+            ) : null}
           </View>
         )}
 

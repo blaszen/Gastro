@@ -15,6 +15,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { getAuth } from "firebase/auth";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../../lib/firebase"; // Adjust path if needed
+import ScreenHeader from "../../components/ScreenHeader";
 
 interface ChatThread {
   id: string;
@@ -101,10 +102,7 @@ export default function MessagesScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-      </View>
+      <ScreenHeader title="Messages" />
 
       {loading ? (
         <View style={styles.loadingContainer}>

@@ -15,6 +15,7 @@ import { collection, onSnapshot, orderBy, query, where } from "firebase/firestor
 import { MaterialCommunityIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
 import { db } from "../../lib/firebase";
 import { fetchUserFavorites, toggleFavoriteRecipe } from "../../lib/favorites";
+import ScreenHeader from "../../components/ScreenHeader";
 
 export default function CommunityFeedModal() {
   const [recipes, setRecipes] = useState<any[]>([]);
@@ -245,22 +246,16 @@ export default function CommunityFeedModal() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <ScreenHeader
+        title="Community Feed"
+        subtitle="Explore public creations from other chefs"
+      />
       <FlatList
         data={recipes}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderRecipeCard}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>
-              Community Feed<Text style={styles.brandDot}>.</Text>
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              Explore public creations from other chefs
-            </Text>
-          </View>
-        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconBg}>

@@ -1,0 +1,111 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- Users ----------
+    // Profiles are readable by signed-in users (needed for friend search by
+    // email and chat headers). Only the owner can write their profile.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isUser(uid)
+        && request.resource.data.get('uid', uid) == uid;
+      allow delete: if false;
+
+      // Favorites: private to the owner.
+      match /favorites/{recipeId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // Prep lists: private to the owner.
+      match /prepLists/{prepId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // Friend requests live in the RECIPIENT's subcollection, keyed by the
+      // sender's uid. Sender may create; recipient may read and delete.
+      match /friendRequests/{fromUid} {
+        allow read, delete: if isUser(uid);
+        allow create: if isUser(fromUid)
+          && fromUid != uid
+          && request.resource.data.fromUid == fromUid
+          && request.resource.data.status == 'pending';
+        allow update: if false;
+      }
+
+      // Friends list. Owner manages their own list. When accepting a request,
+      // the accepter may add themselves to the sender's list, but only while
+      // the sender's request to them still exists.
+      match /friends/{friendUid} {
+        allow read: if isUser(uid);
+        allow write: if isUser(uid);
+        allow create, update: if isUser(friendUid)
+          && request.resource.data.uid == friendUid
+          && exists(/databases/$(database)/documents/users/$(friendUid)/friendRequests/$(uid));
+        // Either side can remove the connection.
+        allow delete: if isUser(friendUid);
+      }
+    }
+
+    // ---------- Recipes ----------
+    match /recipes/{recipeId} {
+      allow read: if signedIn()
+        && (resource.data.isPublic == true || resource.data.userId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ---------- Chats ----------
+    // Thread ids are "<uidA>_<uidB>" (sorted). Membership is checked from the
+    // id itself, so it works before the thread doc exists.
+    function inThread(threadId) {
+      return signedIn() && request.auth.uid in threadId.split('_');
+    }
+
+    match /chats/{threadId} {
+      allow read: if inThread(threadId);
+      allow create, update: if inThread(threadId)
+        && request.resource.data.participants.hasOnly(threadId.split('_'))
+        && request.resource.data.participants.size() == 2;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if inThread(threadId);
+        allow create: if inThread(threadId)
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 5000;
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------- Grocery list (per user) ----------
+    match /groceryItems/{itemId} {
+      allow read, update, delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 200;
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

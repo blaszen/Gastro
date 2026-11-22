@@ -22,6 +22,7 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import { db } from "../../lib/firebase"; // Adjust path to your firebase config
+import ScreenHeader from "../../components/ScreenHeader";
 
 interface FriendRequest {
   id: string;
@@ -162,17 +163,8 @@ export default function NotificationsModalScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <ScreenHeader title="Notifications" subtitle="Friend requests & activity" />
       <View style={styles.container}>
-        {/* Header Bar */}
-        <View style={styles.header}>
-          <View style={styles.headerTitleRow}>
-            <View style={styles.amberBar} />
-            <Text style={styles.headerTitle}>Requests & Notifications</Text>
-          </View>
-          <Pressable onPress={() => router.back()} style={styles.closeBtn}>
-            <FontAwesome name="times" size={16} color="#a1a1aa" />
-          </Pressable>
-        </View>
 
         {/* Tab Switcher */}
         <View style={styles.tabContainer}>
