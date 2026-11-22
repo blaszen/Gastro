@@ -39,3 +39,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# firebase functions
+functions/lib/
+functions/node_modules/
+.env*
+!.env.example
