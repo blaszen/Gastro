@@ -9,14 +9,16 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-  "image": "./assets/images/splash.png",
-  "resizeMode": "contain",
-  "backgroundColor": "#0f1115"
-},
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f1115"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.blaszen.gastro"
     },
     "android": {
+      "package": "com.blaszen.gastro",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -32,10 +34,16 @@
     "plugins": [
       "expo-router",
       "expo-audio",
-      "expo-video"
+      "expo-video",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "blaszen.gastro"
+      }
     }
   }
 }
