@@ -19,6 +19,7 @@ import { addDoc, updateDoc, doc, collection, serverTimestamp } from "firebase/fi
 import { db, auth } from "../../../lib/firebase";
 import { MaterialCommunityIcons, FontAwesome } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { uploadImageAsync } from "../../../lib/uploadImage";
 
 export default function TabThreeScreen({ route, navigation }: any) {
   const existingRecipe = route?.params?.recipe || null;
@@ -83,6 +84,27 @@ export default function TabThreeScreen({ route, navigation }: any) {
 
     setLoading(true);
 
+    // Upload a newly picked photo so others can see it in the Community Feed.
+    let finalImageUrl: string | null = imageUrl.trim() || null;
+    if (finalImageUrl) {
+      try {
+        finalImageUrl = await uploadImageAsync(
+          finalImageUrl,
+          `recipeImages/${user.uid}/${Date.now()}.jpg`
+        );
+      } catch (err: any) {
+        console.error("Image upload failed:", err);
+        Alert.alert(
+          "Photo upload failed",
+          err?.message?.includes("too large")
+            ? err.message
+            : "We couldn't upload your photo. Please try again."
+        );
+        setLoading(false);
+        return;
+      }
+    }
+
     const recipeData = {
       title: title.trim(),
       ingredients: ingredients
@@ -90,7 +112,7 @@ export default function TabThreeScreen({ route, navigation }: any) {
         .map((i) => i.trim())
         .filter(Boolean),
       instructions: instructions.trim(),
-      imageUrl: imageUrl.trim() || null,
+      imageUrl: finalImageUrl,
       isPublic: Boolean(isPublic),
       userId: user.uid,
       createdBy: user.displayName || user.email?.split("@")[0] || "Chef",

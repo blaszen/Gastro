@@ -30,6 +30,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { db } from "../../lib/firebase";
 import ScreenHeader from "../../components/ScreenHeader";
+import { uploadImageAsync } from "../../lib/uploadImage";
 
 interface FriendUser {
   uid: string;
@@ -127,28 +128,39 @@ export default function ProfileModal() {
     setUpdatingPhoto(true);
 
     try {
-      // 1. Update Firebase Auth Profile
+      // 1. Upload to Firebase Storage so the photo is visible on every device
+      const downloadUrl = await uploadImageAsync(
+        selectedUri,
+        `users/${currentUser.uid}/avatar.jpg`
+      );
+
+      // 2. Update Firebase Auth Profile
       await updateProfile(currentUser, {
-        photoURL: selectedUri,
+        photoURL: downloadUrl,
       });
 
-      // 2. Update Firestore User Document
+      // 3. Update Firestore User Document
       const userDocRef = doc(db, "users", currentUser.uid);
       await setDoc(
         userDocRef,
         {
-          photoURL: selectedUri,
+          photoURL: downloadUrl,
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
       );
 
-      // 3. Update Local UI State
-      setPhotoURL(selectedUri);
+      // 4. Update Local UI State
+      setPhotoURL(downloadUrl);
       Alert.alert("Success", "Profile picture updated successfully!");
     } catch (err) {
       console.error("Error updating profile picture:", err);
-      Alert.alert("Error", "Failed to update profile picture. Please try again.");
+      Alert.alert(
+        "Error",
+        (err as any)?.message?.includes("too large")
+          ? (err as any).message
+          : "Failed to update profile picture. Please try again."
+      );
     } finally {
       setUpdatingPhoto(false);
     }
