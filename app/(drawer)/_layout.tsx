@@ -8,6 +8,45 @@ import { getAuth } from "firebase/auth";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 
+// Daily Tips & Chef Wisdom Collection
+const CHEF_WISDOM = [
+  {
+    type: "KITCHEN TIP",
+    content: "Hot pan, cold oil. Always let your stainless steel preheat before adding fat to build a non-stick surface.",
+    author: "Kitchen Pro Tip",
+  },
+  {
+    type: "CHEF QUOTE",
+    content: "Cookery is not chemistry. It is an art. It requires instinct and taste rather than exact measurements.",
+    author: "Marcel Boulestin",
+  },
+  {
+    type: "BATCH PREP",
+    content: "Taste at room temperature. Cold dulls flavors, so season your chilled preps slightly higher than warm dishes.",
+    author: "Prep Rule",
+  },
+  {
+    type: "CHEF QUOTE",
+    content: "A recipe has no soul. You, as the cook, must bring soul to the recipe.",
+    author: "Thomas Keller",
+  },
+  {
+    type: "PLATING TIP",
+    content: "Odd numbers look more natural on a plate. Group proteins or garnishes in 3s or 5s for better visual flow.",
+    author: "Plating Logic",
+  },
+  {
+    type: "CHEF QUOTE",
+    content: "Good food is very often, even most often, simple food.",
+    author: "Anthony Bourdain",
+  },
+  {
+    type: "EFFICIENCY",
+    content: "Clean as you go isn't just about hygiene—it keeps your station mental space clear during heavy rushes.",
+    author: "Line Wisdom",
+  },
+];
+
 function CustomDrawerContent(props: any) {
   const router = useRouter();
   const currentPath = usePathname();
@@ -17,13 +56,29 @@ function CustomDrawerContent(props: any) {
   const auth = getAuth();
   const currentUser = auth.currentUser;
   const userEmail = currentUser?.email || "Chef Guest";
-  // Extract display name from email or fall back to 'Chef'
   const displayName = currentUser?.displayName || userEmail.split("@")[0];
 
-  // Placeholder state for future level system (Curriculum / Challenges)
   const [chefLevel] = useState("Level 1 Chef");
 
-  // Real-time listener for pending notifications / friend requests
+  // Rotating Tip State (Calculates day-of-year index by default)
+  const getDayOfYearIndex = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 0);
+    const diff = now.getTime() - start.getTime();
+    const oneDay = 1000 * 60 * 60 * 24;
+    const day = Math.floor(diff / oneDay);
+    return day % CHEF_WISDOM.length;
+  };
+
+  const [tipIndex, setTipIndex] = useState(getDayOfYearIndex());
+
+  const handleNextTip = () => {
+    setTipIndex((prev) => (prev + 1) % CHEF_WISDOM.length);
+  };
+
+  const currentWisdom = CHEF_WISDOM[tipIndex];
+
+  // Real-time listener for notification badge
   useEffect(() => {
     if (!currentUser) return;
 
@@ -217,18 +272,21 @@ function CustomDrawerContent(props: any) {
         </View>
       </DrawerContentScrollView>
 
-      {/* Floating Kitchen Feed Banner */}
+      {/* Rotating Daily Culinary Wisdom Card */}
       <View style={styles.footer}>
-        <View style={styles.communityBanner}>
-          <View style={styles.communityIconBg}>
-            <FontAwesome name="users" size={14} color="#f59e0b" />
+        <View style={styles.wisdomCard}>
+          <View style={styles.wisdomHeader}>
+            <View style={styles.wisdomBadge}>
+              <FontAwesome name="lightbulb-o" size={12} color="#f59e0b" />
+              <Text style={styles.wisdomBadgeText}>{currentWisdom.type}</Text>
+            </View>
+            <Pressable onPress={handleNextTip} style={styles.refreshBtn} hitSlop={8}>
+              <FontAwesome name="refresh" size={11} color="#71717a" />
+            </Pressable>
           </View>
-          <View style={styles.communityContent}>
-            <Text style={styles.communityTitle}>Kitchen Feed</Text>
-            <Text style={styles.communitySubtitle}>
-              1.4k chefs cooking right now
-            </Text>
-          </View>
+
+          <Text style={styles.wisdomText}>"{currentWisdom.content}"</Text>
+          <Text style={styles.wisdomAuthor}>— {currentWisdom.author}</Text>
         </View>
       </View>
     </View>
@@ -411,37 +469,50 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 32,
   },
-  communityBanner: {
-    flexDirection: "row",
-    alignItems: "center",
+  wisdomCard: {
     backgroundColor: "#181b20",
     borderWidth: 1,
     borderColor: "#27272a",
-    padding: 12,
+    padding: 14,
     borderRadius: 16,
-    gap: 12,
   },
-  communityIconBg: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: "rgba(245, 158, 11, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(245, 158, 11, 0.25)",
-    justifyContent: "center",
+  wisdomHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 8,
   },
-  communityContent: {
-    flex: 1,
+  wisdomBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: "rgba(245, 158, 11, 0.3)",
   },
-  communityTitle: {
-    fontSize: 13,
+  wisdomBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#f59e0b",
+    letterSpacing: 0.8,
+  },
+  refreshBtn: {
+    padding: 4,
+  },
+  wisdomText: {
+    fontSize: 12,
+    color: "#d4d4d8",
+    lineHeight: 17,
+    fontStyle: "italic",
+  },
+  wisdomAuthor: {
+    fontSize: 10,
     fontWeight: "700",
-    color: "#f4f4f5",
-  },
-  communitySubtitle: {
-    fontSize: 11,
     color: "#a1a1aa",
-    marginTop: 1,
+    marginTop: 6,
+    textAlign: "right",
   },
 });

@@ -12,12 +12,23 @@ import {
   StatusBar,
   Alert,
   RefreshControl,
+  Modal,
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useFocusEffect } from "@react-navigation/native";
-import { useRouter } from "expo-router";
 import { fetchUserFavorites, toggleFavoriteRecipe } from "../../../lib/favorites";
+import { getRecipeInformation } from "../../../lib/spoonacular";
+
+interface ExtendedIngredient {
+  id: number;
+  original: string;
+}
+
+interface InstructionStep {
+  number: number;
+  step: string;
+}
 
 interface Recipe {
   id: string | number;
@@ -33,14 +44,23 @@ interface Recipe {
   url?: string;
   readyInMinutes?: number;
   servings?: number;
+  instructions?: string;
+  extendedIngredients?: ExtendedIngredient[];
+  analyzedInstructions?: {
+    steps: InstructionStep[];
+  }[];
   item?: any;
 }
 
 export default function FavoritesScreen() {
-  const router = useRouter();
   const [favorites, setFavorites] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  // Recipe Modal Detail States
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [recipeModalVisible, setRecipeModalVisible] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Fetch full favorite recipes on mount and screen focus
   const loadFavoritesData = async () => {
@@ -77,6 +97,14 @@ export default function FavoritesScreen() {
       prev.filter((r) => String(r.recipeId || r.id) !== recipeIdStr)
     );
 
+    // Close modal if the deleted item is currently viewed in modal
+    if (
+      selectedRecipe &&
+      String(selectedRecipe.recipeId || selectedRecipe.id) === recipeIdStr
+    ) {
+      setRecipeModalVisible(false);
+    }
+
     try {
       await toggleFavoriteRecipe(recipe, true);
     } catch (err) {
@@ -86,24 +114,41 @@ export default function FavoritesScreen() {
     }
   };
 
-  const openRecipeLink = (url?: string | null, recipeId?: string | number) => {
-    if (url) {
-      if (url.startsWith("/(")) {
-        router.push(url as any);
-        return;
-      }
-      if (url.startsWith("http")) {
-        Linking.openURL(url);
-        return;
+  // Handle viewing recipe details via Modal Card
+  const handleViewRecipe = async (recipe: Recipe) => {
+    setSelectedRecipe(recipe);
+    setRecipeModalVisible(true);
+    setLoadingDetails(true);
+
+    const targetId = recipe.recipeId || recipe.id;
+
+    if (targetId) {
+      const fullDetails = await getRecipeInformation(targetId);
+      if (fullDetails) {
+        setSelectedRecipe((prev) => ({
+          ...prev,
+          ...fullDetails,
+          // Preserve fallback fields if missing
+          title: fullDetails.title || prev?.title,
+          image: fullDetails.image || prev?.image,
+        }));
       }
     }
 
-    if (recipeId) {
-      router.push(`/(modals)/recipe/${recipeId}` as any);
+    setLoadingDetails(false);
+  };
+
+  const handleOpenExternalLink = async (url?: string | null) => {
+    if (!url) {
+      Alert.alert("Notice", "External source link not available.");
       return;
     }
-
-    Alert.alert("Notice", "Recipe link not available.");
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      console.error("Failed opening link:", error);
+      Alert.alert("Error", "Could not open external link.");
+    }
   };
 
   return (
@@ -159,7 +204,7 @@ export default function FavoritesScreen() {
               const targetId = recipe.recipeId || recipe.id;
               const itemKey = targetId ? `fav-${targetId}` : `fav-idx-${index}`;
 
-              // Dynamic property lookups to catch raw Firestore documents
+              // Dynamic property lookups for Firestore documents
               const displayTitle =
                 recipe.title ||
                 recipe.recipeTitle ||
@@ -177,16 +222,11 @@ export default function FavoritesScreen() {
                 recipe.item?.image ||
                 recipe.item?.imageUrl;
 
-              const displayUrl =
-                recipe.sourceUrl ||
-                recipe.url ||
-                (targetId ? `/(modals)/recipe/${targetId}` : null);
-
               return (
                 <Pressable
                   key={itemKey}
                   style={styles.card}
-                  onPress={() => openRecipeLink(displayUrl, targetId)}
+                  onPress={() => handleViewRecipe(recipe)}
                 >
                   <View style={styles.imageWrapper}>
                     {displayImage ? (
@@ -218,7 +258,14 @@ export default function FavoritesScreen() {
 
                     <View style={styles.cardFooter}>
                       <Text style={styles.savedBadge}>Bookmarked</Text>
-                      <Text style={styles.linkText}>View Recipe →</Text>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleViewRecipe(recipe);
+                        }}
+                      >
+                        <Text style={styles.linkText}>View Recipe →</Text>
+                      </Pressable>
                     </View>
                   </View>
                 </Pressable>
@@ -227,6 +274,148 @@ export default function FavoritesScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* FULL RECIPE DETAIL MODAL */}
+      <Modal visible={recipeModalVisible} animationType="slide" transparent={false}>
+        <SafeAreaView style={styles.recipeModalContainer}>
+          <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+
+          {/* Modal Header Controls */}
+          <View style={styles.recipeModalHeader}>
+            <Pressable
+              style={styles.closeBtn}
+              onPress={() => setRecipeModalVisible(false)}
+            >
+              <FontAwesome name="chevron-left" size={16} color="#f59e0b" />
+              <Text style={styles.closeBtnText}>Back</Text>
+            </Pressable>
+
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {selectedRecipe && (
+                <Pressable
+                  onPress={() => handleRemoveFavorite(selectedRecipe)}
+                  style={{ padding: 6, marginRight: 12 }}
+                >
+                  <FontAwesome name="heart" size={18} color="#ef4444" />
+                </Pressable>
+              )}
+
+              {selectedRecipe?.sourceUrl && (
+                <Pressable
+                  onPress={() => handleOpenExternalLink(selectedRecipe.sourceUrl)}
+                  style={styles.externalLinkBtn}
+                >
+                  <FontAwesome name="external-link" size={14} color="#a1a1aa" />
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          {selectedRecipe && (
+            <ScrollView
+              contentContainerStyle={{ paddingBottom: 40 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Cover Image & Title */}
+              {(selectedRecipe.image || selectedRecipe.imageUrl) && (
+                <Image
+                  source={{ uri: selectedRecipe.image || selectedRecipe.imageUrl }}
+                  style={styles.recipeModalImage}
+                />
+              )}
+
+              <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+                <Text style={styles.recipeModalTitle}>
+                  {selectedRecipe.title ||
+                    selectedRecipe.recipeTitle ||
+                    selectedRecipe.name ||
+                    "Specialty Dish"}
+                </Text>
+
+                {/* Quick Metrics */}
+                <View style={styles.recipeMetaContainer}>
+                  {selectedRecipe.readyInMinutes ? (
+                    <View style={styles.recipeMetaChip}>
+                      <FontAwesome name="clock-o" size={12} color="#f59e0b" />
+                      <Text style={styles.recipeMetaText}>
+                        {selectedRecipe.readyInMinutes} Mins
+                      </Text>
+                    </View>
+                  ) : null}
+                  {selectedRecipe.servings ? (
+                    <View style={styles.recipeMetaChip}>
+                      <FontAwesome name="user" size={12} color="#f59e0b" />
+                      <Text style={styles.recipeMetaText}>
+                        {selectedRecipe.servings} Servings
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Ingredients Section */}
+                {selectedRecipe.extendedIngredients &&
+                  selectedRecipe.extendedIngredients.length > 0 && (
+                    <View style={styles.recipeSection}>
+                      <View style={styles.titleRow}>
+                        <View style={styles.amberAccentBar} />
+                        <Text style={styles.sectionTitle}>Ingredients</Text>
+                      </View>
+                      {selectedRecipe.extendedIngredients.map((ing, idx) => (
+                        <View key={ing.id || idx} style={styles.ingredientRow}>
+                          <FontAwesome name="circle" size={6} color="#f59e0b" style={{ marginRight: 10 }} />
+                          <Text style={styles.ingredientText}>{ing.original}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                {/* Preparation / Instructions Section */}
+                <View style={styles.recipeSection}>
+                  <View style={styles.titleRow}>
+                    <View style={styles.amberAccentBar} />
+                    <Text style={styles.sectionTitle}>Preparation Steps</Text>
+                  </View>
+
+                  {loadingDetails ? (
+                    <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 20 }} />
+                  ) : selectedRecipe?.analyzedInstructions &&
+                    selectedRecipe.analyzedInstructions.length > 0 &&
+                    selectedRecipe.analyzedInstructions[0].steps.length > 0 ? (
+                    selectedRecipe.analyzedInstructions[0].steps.map((step) => (
+                      <View key={step.number} style={styles.stepRow}>
+                        <View style={styles.stepNumberBadge}>
+                          <Text style={styles.stepNumberText}>{step.number}</Text>
+                        </View>
+                        <Text style={styles.stepText}>{step.step}</Text>
+                      </View>
+                    ))
+                  ) : selectedRecipe?.instructions ? (
+                    <Text style={styles.stepText}>
+                      {selectedRecipe.instructions.replace(/<[^>]*>?/gm, "")}
+                    </Text>
+                  ) : (
+                    <View>
+                      <Text style={styles.stepText}>
+                        Detailed step-by-step instructions are not directly available for this item.
+                      </Text>
+                      {selectedRecipe?.sourceUrl && (
+                        <Pressable
+                          style={{ marginTop: 10 }}
+                          onPress={() => handleOpenExternalLink(selectedRecipe.sourceUrl)}
+                        >
+                          <Text style={{ color: "#f59e0b", fontWeight: "600" }}>
+                            View full recipe source →
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  )}
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -400,5 +589,113 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
     maxWidth: 260,
+  },
+
+  // Recipe Detail Modal Styles
+  recipeModalContainer: {
+    flex: 1,
+    backgroundColor: "#0f1115",
+  },
+  recipeModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#27272a",
+  },
+  closeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  closeBtnText: {
+    color: "#f59e0b",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  externalLinkBtn: {
+    padding: 6,
+  },
+  recipeModalImage: {
+    width: "100%",
+    height: 220,
+  },
+  recipeModalTitle: {
+    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: "800",
+    marginBottom: 12,
+  },
+  recipeMetaContainer: {
+    flexDirection: "row",
+    marginBottom: 16,
+  },
+  recipeMetaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#181b20",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#27272a",
+  },
+  recipeMetaText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  recipeSection: {
+    marginTop: 16,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  ingredientRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 4,
+  },
+  ingredientText: {
+    color: "#a1a1aa",
+    fontSize: 13,
+    flex: 1,
+  },
+  stepRow: {
+    flexDirection: "row",
+    marginVertical: 6,
+  },
+  stepNumberBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#f59e0b",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+    marginTop: 2,
+  },
+  stepNumberText: {
+    color: "#0f1115",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  stepText: {
+    color: "#a1a1aa",
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
   },
 });

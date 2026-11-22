@@ -21,16 +21,16 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { signOut } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
-import { searchRecipes, getRecipeInformation }from "../../../lib/spoonacular";
+import { searchRecipes, getRecipeInformation } from "../../../lib/spoonacular";
 import { useAudioPlayer } from "expo-audio";
 import { router } from "expo-router";
+import { fetchUserFavorites, toggleFavoriteRecipe } from "../../../lib/favorites";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const ALARM_SOUND_URI =
   "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
 
 // --- Data Types ---
-// Add / Update Recipe Interface
 interface ExtendedIngredient {
   id: number;
   original: string;
@@ -40,6 +40,7 @@ interface InstructionStep {
   number: number;
   step: string;
 }
+
 interface Recipe {
   id: string | number;
   title: string;
@@ -52,6 +53,7 @@ interface Recipe {
   sourceUrl?: string;
   summary?: string;
   servings?: number;
+  instructions?: string;
   extendedIngredients?: ExtendedIngredient[];
   analyzedInstructions?: {
     steps: InstructionStep[];
@@ -167,25 +169,69 @@ const services: Service[] = [
 ];
 
 export default function TabOneScreen() {
-  // Inside TabOneScreen component state declaration:
-const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-const [recipeModalVisible, setRecipeModalVisible] = useState(false);
-// Add loading state for recipe details if needed
-const [loadingDetails, setLoadingDetails] = useState(false);
-const handleRecipePress = async (recipe: Recipe) => {
-  setLoadingDetails(true);
-  setRecipeModalVisible(true);
+  // FAVORITES STATE
+  const [favorites, setFavorites] = useState<string[]>([]);
 
-  const fullDetails = await getRecipeInformation(recipe.id);
+  // Load user's initial favorites from Firestore on mount
+  useEffect(() => {
+    const loadFavorites = async () => {
+      try {
+        const favIds = await fetchUserFavorites();
+        setFavorites(favIds);
+      } catch (err) {
+        console.log("Error loading favorites:", err);
+      }
+    };
+    loadFavorites();
+  }, []);
 
-  if (fullDetails) {
-    setSelectedRecipe(fullDetails);
-  } else {
-    setSelectedRecipe(recipe);
-  }
+  // Handle favorite toggle with Optimistic UI Updates
+  const handleToggleFavorite = async (recipe: any) => {
+    const recipeIdStr = String(recipe.id);
+    const isCurrentlyFav = favorites.includes(recipeIdStr);
 
-  setLoadingDetails(false);
-};
+    // 1. Optimistically update UI immediately
+    setFavorites((prev) =>
+      isCurrentlyFav
+        ? prev.filter((id) => id !== recipeIdStr)
+        : [...prev, recipeIdStr]
+    );
+
+    try {
+      // 2. Sync with Firestore
+      await toggleFavoriteRecipe(recipe, isCurrentlyFav);
+    } catch (err) {
+      console.log("Error updating favorite in Firestore:", err);
+      // 3. Revert if call fails
+      setFavorites((prev) =>
+        isCurrentlyFav
+          ? [...prev, recipeIdStr]
+          : prev.filter((id) => id !== recipeIdStr)
+      );
+      Alert.alert("Error", "Could not update favorites. Please try again.");
+    }
+  };
+
+  // Recipe detail modal state
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [recipeModalVisible, setRecipeModalVisible] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  const handleRecipePress = async (recipe: Recipe) => {
+    setLoadingDetails(true);
+    setRecipeModalVisible(true);
+
+    const fullDetails = await getRecipeInformation(recipe.id);
+
+    if (fullDetails) {
+      setSelectedRecipe(fullDetails);
+    } else {
+      setSelectedRecipe(recipe);
+    }
+
+    setLoadingDetails(false);
+  };
+
   const [search, setSearch] = useState("");
   const navigation = useNavigation();
 
@@ -208,8 +254,7 @@ const handleRecipePress = async (recipe: Recipe) => {
   const player = useAudioPlayer(ALARM_SOUND_URI);
 
   // Quick Converter Local State
-  const [selectedCategory, setSelectedCategory] =
-    useState<ConversionCategory>("weight");
+  const [selectedCategory, setSelectedCategory] = useState<ConversionCategory>("weight");
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
   const [convertAmount, setConvertAmount] = useState("1");
 
@@ -340,51 +385,73 @@ const handleRecipePress = async (recipe: Recipe) => {
     setEightySixItems(eightySixItems.filter((_, i) => i !== index));
   };
 
-  const renderRecipeCard = (item: Recipe) => (
-  <TouchableOpacity
-    key={item.id}
-    activeOpacity={0.88}
-    style={[styles.card, { width: CARD_WIDTH }]}
-    onPress={() => handleRecipePress(item)}
-  >
-    <View style={styles.imageWrapper}>
-      <Image
-        source={{ uri: item.image }}
-        style={styles.cardImage}
-        resizeMode="cover"
-      />
-      {item.tag && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{item.tag}</Text>
-        </View>
-      )}
-      {(item.time || item.readyInMinutes) && (
-        <View style={styles.timeBadge}>
-          <FontAwesome
-            name="clock-o"
-            size={10}
-            color="#f59e0b"
-            style={{ marginRight: 4 }}
+  const renderRecipeCard = (item: Recipe) => {
+    const isFav = favorites.includes(String(item.id));
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        activeOpacity={0.88}
+        style={[styles.card, { width: CARD_WIDTH }]}
+        onPress={() => handleRecipePress(item)}
+      >
+        <View style={styles.imageWrapper}>
+          <Image
+            source={{ uri: item.image }}
+            style={styles.cardImage}
+            resizeMode="cover"
           />
-          <Text style={styles.timeText}>
-            {item.readyInMinutes ? `${item.readyInMinutes}m` : item.time}
-          </Text>
+
+          {/* Favorite Heart Badge Overlay */}
+          <Pressable
+            style={styles.favoriteBadge}
+            onPress={(e) => {
+              e.stopPropagation(); // Prevents opening modal when clicking heart
+              handleToggleFavorite(item);
+            }}
+          >
+            <FontAwesome
+              name={isFav ? "heart" : "heart-o"}
+              size={14}
+              color={isFav ? "#ef4444" : "#f59e0b"}
+            />
+          </Pressable>
+
+          {item.tag && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{item.tag}</Text>
+            </View>
+          )}
+
+          {(item.time || item.readyInMinutes) && (
+            <View style={styles.timeBadge}>
+              <FontAwesome
+                name="clock-o"
+                size={10}
+                color="#f59e0b"
+                style={{ marginRight: 4 }}
+              />
+              <Text style={styles.timeText}>
+                {item.readyInMinutes ? `${item.readyInMinutes}m` : item.time}
+              </Text>
+            </View>
+          )}
         </View>
-      )}
-    </View>
-    <View style={styles.cardContent}>
-      <Text style={styles.cardTitle} numberOfLines={1}>
-        {item.title}
-      </Text>
-      <View style={styles.metaRow}>
-        <FontAwesome name="star" size={12} color="#f59e0b" />
-        <Text style={styles.ratingText}>{item.rating || "4.8"}</Text>
-        <Text style={styles.dot}>•</Text>
-        <Text style={styles.metaText}>Featured</Text>
-      </View>
-    </View>
-  </TouchableOpacity>
-);
+
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <View style={styles.metaRow}>
+            <FontAwesome name="star" size={12} color="#f59e0b" />
+            <Text style={styles.ratingText}>{item.rating || "4.8"}</Text>
+            <Text style={styles.dot}>•</Text>
+            <Text style={styles.metaText}>Featured</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderVideoCard = ({ item }: { item: Video }) => (
     <TouchableOpacity
@@ -486,135 +553,146 @@ const handleRecipePress = async (recipe: Recipe) => {
             <FontAwesome name="sign-out" size={15} color="#ef4444" />
           </Pressable>
         </View>
-{/* In-App Recipe Detail Modal */}
-<Modal visible={recipeModalVisible} animationType="slide" transparent={false}>
-  <SafeAreaView style={styles.recipeModalContainer}>
-    <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
-    
-    {/* Modal Header Controls */}
-    <View style={styles.recipeModalHeader}>
-      <Pressable 
-        style={styles.closeBtn} 
-        onPress={() => setRecipeModalVisible(false)}
-      >
-        <FontAwesome name="chevron-left" size={16} color="#f59e0b" />
-        <Text style={styles.closeBtnText}>Back</Text>
-      </Pressable>
-      
-      {selectedRecipe?.sourceUrl && (
-        <Pressable 
-          onPress={() => handleOpenLink(selectedRecipe.sourceUrl)}
-          style={styles.externalLinkBtn}
-        >
-          <FontAwesome name="external-link" size={14} color="#a1a1aa" />
-        </Pressable>
-      )}
-    </View>
 
-    {selectedRecipe && (
-      <ScrollView 
-        contentContainerStyle={{ paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Cover Image & Title */}
-        <Image 
-          source={{ uri: selectedRecipe.image }} 
-          style={styles.recipeModalImage} 
-        />
-        
-        <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
-          <Text style={styles.recipeModalTitle}>{selectedRecipe.title}</Text>
-          
-          {/* Quick Metrics */}
-          <View style={styles.recipeMetaContainer}>
-            {selectedRecipe.readyInMinutes && (
-              <View style={styles.recipeMetaChip}>
-                <FontAwesome name="clock-o" size={12} color="#f59e0b" />
-                <Text style={styles.recipeMetaText}>
-                  {selectedRecipe.readyInMinutes} Mins
-                </Text>
-              </View>
-            )}
-            {selectedRecipe.servings && (
-              <View style={styles.recipeMetaChip}>
-                <FontAwesome name="user" size={12} color="#f59e0b" />
-                <Text style={styles.recipeMetaText}>
-                  {selectedRecipe.servings} Servings
-                </Text>
-              </View>
-            )}
-          </View>
+        {/* In-App Recipe Detail Modal */}
+        <Modal visible={recipeModalVisible} animationType="slide" transparent={false}>
+          <SafeAreaView style={styles.recipeModalContainer}>
+            <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
 
-          {/* Ingredients Section */}
-          {selectedRecipe.extendedIngredients && 
-           selectedRecipe.extendedIngredients.length > 0 && (
-            <View style={styles.recipeSection}>
-              <View style={styles.titleRow}>
-                <View style={styles.amberAccentBar} />
-                <Text style={styles.sectionTitle}>Ingredients</Text>
+            {/* Modal Header Controls */}
+            <View style={styles.recipeModalHeader}>
+              <Pressable
+                style={styles.closeBtn}
+                onPress={() => setRecipeModalVisible(false)}
+              >
+                <FontAwesome name="chevron-left" size={16} color="#f59e0b" />
+                <Text style={styles.closeBtnText}>Back</Text>
+              </Pressable>
+
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {selectedRecipe && (
+                  <Pressable
+                    onPress={() => handleToggleFavorite(selectedRecipe)}
+                    style={{ padding: 6, marginRight: 12 }}
+                  >
+                    <FontAwesome
+                      name={favorites.includes(String(selectedRecipe.id)) ? "heart" : "heart-o"}
+                      size={18}
+                      color={favorites.includes(String(selectedRecipe.id)) ? "#ef4444" : "#a1a1aa"}
+                    />
+                  </Pressable>
+                )}
+
+                {selectedRecipe?.sourceUrl && (
+                  <Pressable
+                    onPress={() => handleOpenLink(selectedRecipe.sourceUrl)}
+                    style={styles.externalLinkBtn}
+                  >
+                    <FontAwesome name="external-link" size={14} color="#a1a1aa" />
+                  </Pressable>
+                )}
               </View>
-              {selectedRecipe.extendedIngredients.map((ing, idx) => (
-                <View key={ing.id || idx} style={styles.ingredientRow}>
-                  <FontAwesome name="circle" size={6} color="#f59e0b" style={{ marginRight: 10 }} />
-                  <Text style={styles.ingredientText}>{ing.original}</Text>
-                </View>
-              ))}
             </View>
-          )}
-{/* Preparation / Instructions Section */}
-<View style={styles.recipeSection}>
-  <View style={styles.titleRow}>
-    <View style={styles.amberAccentBar} />
-    <Text style={styles.sectionTitle}>Preparation Steps</Text>
-  </View>
 
-  {loadingDetails ? (
-    <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 20 }} />
-  ) : selectedRecipe?.analyzedInstructions &&
-    selectedRecipe.analyzedInstructions.length > 0 &&
-    selectedRecipe.analyzedInstructions[0].steps.length > 0 ? (
-    
-    /* Option 1: Structured Analyzed Steps */
-    selectedRecipe.analyzedInstructions[0].steps.map((step) => (
-      <View key={step.number} style={styles.stepRow}>
-        <View style={styles.stepNumberBadge}>
-          <Text style={styles.stepNumberText}>{step.number}</Text>
-        </View>
-        <Text style={styles.stepText}>{step.step}</Text>
-      </View>
-    ))
-  ) : selectedRecipe?.instructions ? (
-    
-    /* Option 2: Fallback to Raw Instructions Text (strip HTML tags) */
-    <Text style={styles.stepText}>
-      {selectedRecipe.instructions.replace(/<[^>]*>?/gm, "")}
-    </Text>
-  ) : (
-    
-    /* Option 3: Fallback Source Link */
-    <View>
-      <Text style={styles.stepText}>
-        Detailed step-by-step instructions are not directly available for this item.
-      </Text>
-      {selectedRecipe?.sourceUrl && (
-        <Pressable
-          style={{ marginTop: 10 }}
-          onPress={() => handleOpenLink(selectedRecipe.sourceUrl)}
-        >
-          <Text style={{ color: "#f59e0b", fontWeight: "600" }}>
-            View full recipe source →
-          </Text>
-        </Pressable>
-      )}
-    </View>
-  )}
-</View>
-          
-        </View>
-      </ScrollView>
-    )}
-  </SafeAreaView>
-</Modal>
+            {selectedRecipe && (
+              <ScrollView
+                contentContainerStyle={{ paddingBottom: 40 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Cover Image & Title */}
+                <Image
+                  source={{ uri: selectedRecipe.image }}
+                  style={styles.recipeModalImage}
+                />
+
+                <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+                  <Text style={styles.recipeModalTitle}>{selectedRecipe.title}</Text>
+
+                  {/* Quick Metrics */}
+                  <View style={styles.recipeMetaContainer}>
+                    {selectedRecipe.readyInMinutes && (
+                      <View style={styles.recipeMetaChip}>
+                        <FontAwesome name="clock-o" size={12} color="#f59e0b" />
+                        <Text style={styles.recipeMetaText}>
+                          {selectedRecipe.readyInMinutes} Mins
+                        </Text>
+                      </View>
+                    )}
+                    {selectedRecipe.servings && (
+                      <View style={styles.recipeMetaChip}>
+                        <FontAwesome name="user" size={12} color="#f59e0b" />
+                        <Text style={styles.recipeMetaText}>
+                          {selectedRecipe.servings} Servings
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Ingredients Section */}
+                  {selectedRecipe.extendedIngredients &&
+                    selectedRecipe.extendedIngredients.length > 0 && (
+                      <View style={styles.recipeSection}>
+                        <View style={styles.titleRow}>
+                          <View style={styles.amberAccentBar} />
+                          <Text style={styles.sectionTitle}>Ingredients</Text>
+                        </View>
+                        {selectedRecipe.extendedIngredients.map((ing, idx) => (
+                          <View key={ing.id || idx} style={styles.ingredientRow}>
+                            <FontAwesome name="circle" size={6} color="#f59e0b" style={{ marginRight: 10 }} />
+                            <Text style={styles.ingredientText}>{ing.original}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                  {/* Preparation / Instructions Section */}
+                  <View style={styles.recipeSection}>
+                    <View style={styles.titleRow}>
+                      <View style={styles.amberAccentBar} />
+                      <Text style={styles.sectionTitle}>Preparation Steps</Text>
+                    </View>
+
+                    {loadingDetails ? (
+                      <ActivityIndicator size="small" color="#f59e0b" style={{ marginVertical: 20 }} />
+                    ) : selectedRecipe?.analyzedInstructions &&
+                      selectedRecipe.analyzedInstructions.length > 0 &&
+                      selectedRecipe.analyzedInstructions[0].steps.length > 0 ? (
+                      selectedRecipe.analyzedInstructions[0].steps.map((step) => (
+                        <View key={step.number} style={styles.stepRow}>
+                          <View style={styles.stepNumberBadge}>
+                            <Text style={styles.stepNumberText}>{step.number}</Text>
+                          </View>
+                          <Text style={styles.stepText}>{step.step}</Text>
+                        </View>
+                      ))
+                    ) : selectedRecipe?.instructions ? (
+                      <Text style={styles.stepText}>
+                        {selectedRecipe.instructions.replace(/<[^>]*>?/gm, "")}
+                      </Text>
+                    ) : (
+                      <View>
+                        <Text style={styles.stepText}>
+                          Detailed step-by-step instructions are not directly available for this item.
+                        </Text>
+                        {selectedRecipe?.sourceUrl && (
+                          <Pressable
+                            style={{ marginTop: 10 }}
+                            onPress={() => handleOpenLink(selectedRecipe.sourceUrl)}
+                          >
+                            <Text style={{ color: "#f59e0b", fontWeight: "600" }}>
+                              View full recipe source →
+                            </Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </ScrollView>
+            )}
+          </SafeAreaView>
+        </Modal>
+
         {/* Quick Utility Tools Grid */}
         <View style={styles.utilityGrid}>
           <TouchableOpacity
@@ -774,7 +852,7 @@ const handleRecipePress = async (recipe: Recipe) => {
         />
       </ScrollView>
 
-      {/* Expanded Multi-Option Converter Modal */}
+      {/* Converter Modal */}
       <Modal visible={converterVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -897,65 +975,63 @@ const handleRecipePress = async (recipe: Recipe) => {
         </View>
       </Modal>
 
-      {/* Interactive Kitchen Timer Modal */}
+      {/* Kitchen Timer Modal */}
       <Modal visible={timerVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Line & Prep Timer</Text>
+              <Text style={styles.modalTitle}>Kitchen Timer</Text>
               <Pressable onPress={() => setTimerVisible(false)}>
                 <FontAwesome name="times" size={18} color="#a1a1aa" />
               </Pressable>
             </View>
 
-            {/* Quick Presets */}
-            <View style={styles.presetRow}>
-              {[3, 5, 10, 15].map((mins) => (
+            <View style={styles.timerDisplayContainer}>
+              <Text style={styles.timerDisplayText}>{formatTimer(secondsLeft)}</Text>
+            </View>
+
+            <View style={styles.timerPresetsRow}>
+              {[1, 3, 5, 10, 15].map((mins) => (
                 <Pressable
                   key={mins}
-                  style={[
-                    styles.presetBtn,
-                    secondsLeft === mins * 60 && styles.presetBtnActive,
-                  ]}
+                  style={styles.timerPresetChip}
                   onPress={() => {
                     setIsTimerRunning(false);
                     setSecondsLeft(mins * 60);
                   }}
                 >
-                  <Text style={styles.presetText}>{mins}m</Text>
+                  <Text style={styles.timerPresetText}>{mins}m</Text>
                 </Pressable>
               ))}
             </View>
 
-            {/* Display */}
-            <View style={styles.displayBox}>
-              <Text style={styles.displayText}>{formatTimer(secondsLeft)}</Text>
-            </View>
-
-            {/* Controls */}
-            <View style={styles.controlRow}>
+            <View style={styles.timerControlsRow}>
               <Pressable
                 style={[
-                  styles.actionBtn,
-                  { backgroundColor: isTimerRunning ? "#ef4444" : "#22c55e" },
+                  styles.timerBtn,
+                  isTimerRunning ? styles.timerBtnStop : styles.timerBtnStart,
                 ]}
                 onPress={() => setIsTimerRunning(!isTimerRunning)}
               >
                 <FontAwesome
                   name={isTimerRunning ? "pause" : "play"}
-                  size={16}
-                  color="#ffffff"
+                  size={14}
+                  color="#0f1115"
                 />
+                <Text style={styles.timerBtnText}>
+                  {isTimerRunning ? "Pause" : "Start"}
+                </Text>
               </Pressable>
 
               <Pressable
-                style={[styles.actionBtn, { backgroundColor: "#27272a" }]}
+                style={[styles.timerBtn, styles.timerBtnReset]}
                 onPress={() => {
                   setIsTimerRunning(false);
                   setSecondsLeft(300);
                 }}
               >
-                <FontAwesome name="refresh" size={16} color="#f4f4f5" />
+                <FontAwesome name="rotate-left" size={14} color="#ffffff" />
+                <Text style={[styles.timerBtnText, { color: "#ffffff" }]}>Reset</Text>
               </Pressable>
             </View>
           </View>
@@ -974,15 +1050,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0f1115",
   },
-
-  // Header
   header: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
   },
   leftHeader: {
     flexDirection: "row",
@@ -991,61 +1065,56 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   avatarBorder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#181b20",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#f59e0b",
-  },
-  avatar: {
     width: 42,
     height: 42,
     borderRadius: 21,
+    borderWidth: 1.5,
+    borderColor: "#f59e0b",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   headerTextContainer: {
-    marginLeft: 12,
     flex: 1,
   },
   greeting: {
+    color: "#a1a1aa",
     fontSize: 11,
-    fontWeight: "600",
-    color: "#f59e0b",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   username: {
-    fontSize: 16,
+    color: "#ffffff",
+    fontSize: 15,
     fontWeight: "700",
-    color: "#f4f4f5",
-    marginTop: 1,
   },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#181b20",
-    borderWidth: 1,
-    borderColor: "#27272a",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: "rgba(239, 68, 68, 0.2)",
   },
-
-  // Utilities Grid
   utilityGrid: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 18,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   utilityCard: {
     flex: 1,
-    backgroundColor: "#181b20",
-    borderRadius: 14,
+    backgroundColor: "#181a20",
+    borderRadius: 12,
     padding: 12,
-    marginRight: 8,
+    marginHorizontal: 3,
     borderWidth: 1,
     borderColor: "#27272a",
   },
@@ -1053,116 +1122,93 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#0f1115",
+    backgroundColor: "#27272a",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
   },
   utilityTitle: {
-    color: "#f4f4f5",
+    color: "#ffffff",
     fontSize: 12,
     fontWeight: "700",
+    marginBottom: 2,
   },
   utilitySub: {
     color: "#71717a",
     fontSize: 10,
-    marginTop: 2,
   },
-
-  // Search Bar
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#181b20",
+    backgroundColor: "#181a20",
     borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 48,
-    marginHorizontal: 20,
-    marginBottom: 20,
+    marginHorizontal: 16,
+    paddingHorizontal: 12,
+    height: 44,
     borderWidth: 1,
     borderColor: "#27272a",
+    marginBottom: 20,
   },
   searchIcon: {
     marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: "#f4f4f5",
+    color: "#ffffff",
+    fontSize: 13,
   },
-
-  // States & Pagination
   loaderBox: {
-    paddingVertical: 16,
+    paddingVertical: 20,
     alignItems: "center",
   },
   emptyContainer: {
     alignItems: "center",
-    paddingVertical: 20,
+    paddingVertical: 30,
   },
   emptyText: {
-    fontSize: 13,
     color: "#71717a",
-    marginTop: 6,
-  },
-  resultsCount: {
-    fontSize: 12,
-    color: "#71717a",
-  },
-  moreButton: {
-    alignSelf: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "#181b20",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#27272a",
+    fontSize: 14,
     marginTop: 8,
   },
-  moreButtonText: {
-    color: "#f59e0b",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  // Section Headers
   sectionHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginHorizontal: 20,
-    marginBottom: 14,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
   },
   amberAccentBar: {
-    width: 4,
-    height: 16,
+    width: 3,
+    height: 14,
     backgroundColor: "#f59e0b",
     borderRadius: 2,
     marginRight: 8,
   },
   sectionTitle: {
-    fontSize: 16,
+    color: "#ffffff",
+    fontSize: 15,
     fontWeight: "700",
-    color: "#f4f4f5",
+    letterSpacing: 0.2,
   },
   seeAllText: {
-    fontSize: 12,
     color: "#f59e0b",
+    fontSize: 12,
     fontWeight: "600",
   },
-  listContainer: {
-    paddingLeft: 20,
-    paddingRight: 6,
-    marginBottom: 20,
+  resultsCount: {
+    color: "#71717a",
+    fontSize: 12,
   },
-
-  // Recipe & Video Cards
+  listContainer: {
+    paddingLeft: 16,
+    paddingRight: 8,
+  },
   card: {
-    backgroundColor: "#181b20",
+    backgroundColor: "#181a20",
     borderRadius: 14,
     marginRight: 14,
     overflow: "hidden",
@@ -1170,12 +1216,27 @@ const styles = StyleSheet.create({
     borderColor: "#27272a",
   },
   imageWrapper: {
-    height: 120,
     position: "relative",
+    width: "100%",
+    height: 120,
   },
   cardImage: {
     width: "100%",
     height: "100%",
+  },
+  favoriteBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(15, 17, 21, 0.85)",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: "#f59e0b",
+    zIndex: 10,
   },
   badge: {
     position: "absolute",
@@ -1183,8 +1244,10 @@ const styles = StyleSheet.create({
     left: 8,
     backgroundColor: "rgba(15, 17, 21, 0.85)",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: "#3f3f46",
   },
   badgeText: {
     color: "#f59e0b",
@@ -1194,25 +1257,51 @@ const styles = StyleSheet.create({
   timeBadge: {
     position: "absolute",
     bottom: 8,
-    right: 8,
+    left: 8,
     backgroundColor: "rgba(15, 17, 21, 0.85)",
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     flexDirection: "row",
     alignItems: "center",
   },
   timeText: {
-    color: "#f4f4f5",
+    color: "#ffffff",
     fontSize: 10,
-    fontWeight: "500",
+    fontWeight: "600",
+  },
+  cardContent: {
+    padding: 12,
+  },
+  cardTitle: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  ratingText: {
+    color: "#f59e0b",
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 4,
+  },
+  dot: {
+    color: "#3f3f46",
+    marginHorizontal: 6,
+  },
+  metaText: {
+    color: "#71717a",
+    fontSize: 11,
   },
   playOverlay: {
     position: "absolute",
     top: "50%",
     left: "50%",
-    marginTop: -16,
-    marginLeft: -16,
+    transform: [{ translateX: -16 }, { translateY: -16 }],
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -1226,53 +1315,43 @@ const styles = StyleSheet.create({
     right: 8,
     backgroundColor: "rgba(15, 17, 21, 0.85)",
     paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   durationText: {
-    color: "#f4f4f5",
+    color: "#ffffff",
     fontSize: 10,
-  },
-  cardContent: {
-    padding: 12,
-  },
-  cardTitle: {
-    color: "#f4f4f5",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-  },
-  ratingText: {
-    color: "#f4f4f5",
-    fontSize: 11,
     fontWeight: "600",
-    marginLeft: 4,
-  },
-  dot: {
-    color: "#71717a",
-    marginHorizontal: 6,
-  },
-  metaText: {
-    color: "#71717a",
-    fontSize: 11,
   },
   subText: {
-    color: "#f59e0b",
+    color: "#71717a",
     fontSize: 11,
-    marginTop: 4,
   },
-
-  // Service Cards
+  moreButton: {
+    alignSelf: "center",
+    marginTop: 14,
+    backgroundColor: "#181a20",
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#f59e0b",
+  },
+  moreButtonText: {
+    color: "#f59e0b",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   serviceCard: {
-    height: 150,
-    borderRadius: 16,
+    height: 140,
+    borderRadius: 14,
     marginRight: 14,
     overflow: "hidden",
     position: "relative",
+    justifyContent: "flex-end",
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#27272a",
   },
   serviceImage: {
     ...StyleSheet.absoluteFillObject,
@@ -1284,54 +1363,50 @@ const styles = StyleSheet.create({
   serviceIconContainer: {
     position: "absolute",
     top: 12,
-    left: 12,
+    right: 12,
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "rgba(24, 27, 32, 0.9)",
+    backgroundColor: "rgba(15, 17, 21, 0.8)",
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: "#f59e0b",
   },
   serviceContent: {
-    position: "absolute",
-    bottom: 12,
-    left: 12,
-    right: 12,
+    zIndex: 2,
   },
   serviceTitle: {
-    color: "#f4f4f5",
+    color: "#ffffff",
     fontSize: 14,
     fontWeight: "700",
+    marginBottom: 2,
   },
   serviceSubtitle: {
     color: "#a1a1aa",
     fontSize: 11,
-    marginTop: 2,
+    marginBottom: 8,
   },
   serviceCta: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
   },
   serviceCtaText: {
     color: "#f59e0b",
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "700",
     marginRight: 6,
   },
-
-  // Modal Overlay & Base
+  // Modal Common Overlay Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    width: "100%",
-    backgroundColor: "#181b20",
-    borderRadius: 16,
+    backgroundColor: "#181a20",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: 20,
     borderWidth: 1,
     borderColor: "#27272a",
@@ -1343,7 +1418,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    color: "#f4f4f5",
+    color: "#ffffff",
     fontSize: 16,
     fontWeight: "700",
   },
@@ -1355,16 +1430,112 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     backgroundColor: "#0f1115",
+    color: "#ffffff",
     borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
     borderWidth: 1,
     borderColor: "#27272a",
-    paddingHorizontal: 12,
-    height: 42,
-    color: "#f4f4f5",
     marginBottom: 12,
   },
-
-  // Converter Modal Specifics
+  // Recipe Detail Modal Styles
+  recipeModalContainer: {
+    flex: 1,
+    backgroundColor: "#0f1115",
+  },
+  recipeModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#27272a",
+  },
+  closeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  closeBtnText: {
+    color: "#f59e0b",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  externalLinkBtn: {
+    padding: 6,
+  },
+  recipeModalImage: {
+    width: "100%",
+    height: 220,
+  },
+  recipeModalTitle: {
+    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: "800",
+    marginBottom: 12,
+  },
+  recipeMetaContainer: {
+    flexDirection: "row",
+    marginBottom: 16,
+  },
+  recipeMetaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#181a20",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#27272a",
+  },
+  recipeMetaText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  recipeSection: {
+    marginTop: 16,
+  },
+  ingredientRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 4,
+  },
+  ingredientText: {
+    color: "#a1a1aa",
+    fontSize: 13,
+    flex: 1,
+  },
+  stepRow: {
+    flexDirection: "row",
+    marginVertical: 6,
+  },
+  stepNumberBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#f59e0b",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+    marginTop: 2,
+  },
+  stepNumberText: {
+    color: "#0f1115",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  stepText: {
+    color: "#a1a1aa",
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
+  },
+  // Converter Styles
   catScrollView: {
     flexDirection: "row",
     marginBottom: 12,
@@ -1372,7 +1543,7 @@ const styles = StyleSheet.create({
   catChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 8,
     backgroundColor: "#0f1115",
     marginRight: 8,
     borderWidth: 1,
@@ -1384,7 +1555,7 @@ const styles = StyleSheet.create({
   },
   catChipText: {
     color: "#a1a1aa",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
   },
   catChipTextActive: {
@@ -1396,13 +1567,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: "#0f1115",
-    marginBottom: 6,
+    borderRadius: 6,
+    marginBottom: 4,
   },
   optionRowActive: {
-    borderColor: "#f59e0b",
-    borderWidth: 1,
+    backgroundColor: "#0f1115",
   },
   optionRowText: {
     color: "#a1a1aa",
@@ -1410,33 +1579,32 @@ const styles = StyleSheet.create({
   },
   optionRowTextActive: {
     color: "#f59e0b",
-    fontWeight: "600",
+    fontWeight: "700",
   },
   resultBox: {
-    marginTop: 10,
-    padding: 12,
     backgroundColor: "#0f1115",
+    padding: 12,
     borderRadius: 8,
-    alignItems: "center",
     borderWidth: 1,
     borderColor: "#27272a",
+    marginTop: 8,
+    alignItems: "center",
   },
   resultLabel: {
-    color: "#a1a1aa",
+    color: "#71717a",
     fontSize: 11,
+    textTransform: "uppercase",
   },
   resultValue: {
     color: "#f59e0b",
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     marginTop: 2,
   },
-
-  // 86 Modal Specifics
+  // 86 Board Styles
   add86Row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
   },
   add86Btn: {
     width: 42,
@@ -1445,169 +1613,77 @@ const styles = StyleSheet.create({
     backgroundColor: "#f59e0b",
     justifyContent: "center",
     alignItems: "center",
+    marginLeft: 8,
   },
   eightySixRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#27272a",
-  },
-  eightySixText: {
-    color: "#f4f4f5",
-    fontSize: 13,
-  },
-
-  // Timer Modal Specifics
-  presetRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  presetBtn: {
-    flex: 1,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
     backgroundColor: "#0f1115",
     borderRadius: 8,
+    marginBottom: 6,
+  },
+  eightySixText: {
+    color: "#ffffff",
+    fontSize: 13,
+  },
+  // Timer Styles
+  timerDisplayContainer: {
     alignItems: "center",
-    marginHorizontal: 4,
-    borderWidth: 1,
-    borderColor: "#27272a",
+    marginVertical: 16,
   },
-  presetBtnActive: {
-    borderColor: "#f59e0b",
-    backgroundColor: "#181b20",
-  },
-  presetText: {
-    color: "#f4f4f5",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  displayBox: {
-    backgroundColor: "#0f1115",
-    borderRadius: 12,
-    paddingVertical: 20,
-    alignItems: "center",
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#27272a",
-  },
-  displayText: {
-    fontSize: 36,
-    fontWeight: "700",
+  timerDisplayText: {
     color: "#f59e0b",
+    fontSize: 42,
+    fontWeight: "800",
     fontVariant: ["tabular-nums"],
   },
-  controlRow: {
+  timerPresetsRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: 12,
+    justifyContent: "space-around",
+    marginBottom: 20,
   },
-  actionBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  timerPresetChip: {
+    backgroundColor: "#0f1115",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#27272a",
+  },
+  timerPresetText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  timerControlsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  timerBtn: {
+    flex: 1,
+    flexDirection: "row",
+    height: 44,
+    borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
-  },// Recipe Modal Styles
-recipeModalContainer: {
-  flex: 1,
-  backgroundColor: "#0f1115",
-},
-recipeModalHeader: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingHorizontal: 20,
-  paddingVertical: 14,
-  backgroundColor: "#181b20",
-  borderBottomWidth: 1,
-  borderBottomColor: "#27272a",
-},
-closeBtn: {
-  flexDirection: "row",
-  alignItems: "center",
-},
-closeBtnText: {
-  color: "#f59e0b",
-  fontSize: 14,
-  fontWeight: "700",
-  marginLeft: 8,
-},
-externalLinkBtn: {
-  padding: 6,
-},
-recipeModalImage: {
-  width: "100%",
-  height: 220,
-},
-recipeModalTitle: {
-  fontSize: 20,
-  fontWeight: "800",
-  color: "#f4f4f5",
-  marginBottom: 12,
-},
-recipeMetaContainer: {
-  flexDirection: "row",
-  marginBottom: 20,
-},
-recipeMetaChip: {
-  flexDirection: "row",
-  alignItems: "center",
-  backgroundColor: "#181b20",
-  paddingHorizontal: 12,
-  paddingVertical: 6,
-  borderRadius: 8,
-  marginRight: 10,
-  borderWidth: 1,
-  borderColor: "#27272a",
-},
-recipeMetaText: {
-  color: "#f4f4f5",
-  fontSize: 12,
-  fontWeight: "600",
-  marginLeft: 6,
-},
-recipeSection: {
-  marginTop: 16,
-  marginBottom: 12,
-},
-ingredientRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  paddingVertical: 8,
-  borderBottomWidth: 1,
-  borderBottomColor: "#181b20",
-},
-ingredientText: {
-  color: "#d4d4d8",
-  fontSize: 13,
-},
-stepRow: {
-  flexDirection: "row",
-  marginBottom: 14,
-  alignItems: "flex-start",
-},
-stepNumberBadge: {
-  width: 24,
-  height: 24,
-  borderRadius: 12,
-  backgroundColor: "#f59e0b",
-  justifyContent: "center",
-  alignItems: "center",
-  marginRight: 12,
-  marginTop: 2,
-},
-stepNumberText: {
-  color: "#0f1115",
-  fontWeight: "800",
-  fontSize: 12,
-},
-stepText: {
-  flex: 1,
-  color: "#d4d4d8",
-  fontSize: 13,
-  lineHeight: 20,
-},
+    marginHorizontal: 4,
+  },
+  timerBtnStart: {
+    backgroundColor: "#f59e0b",
+  },
+  timerBtnStop: {
+    backgroundColor: "#ef4444",
+  },
+  timerBtnReset: {
+    backgroundColor: "#27272a",
+  },
+  timerBtnText: {
+    color: "#0f1115",
+    fontWeight: "700",
+    fontSize: 13,
+    marginLeft: 6,
+  },
 });

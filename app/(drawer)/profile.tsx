@@ -12,23 +12,22 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
-  FlatList,
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter } from "expo-router";
-import { getAuth } from "firebase/auth";
+import { getAuth, updateProfile } from "firebase/auth";
 import {
   collection,
   doc,
-  getDoc,
-  getDocs,
   setDoc,
   deleteDoc,
   query,
   where,
+  getDocs,
   onSnapshot,
 } from "firebase/firestore";
+import * as ImagePicker from "expo-image-picker";
 import { db } from "../../lib/firebase";
 import ScreenHeader from "../../components/ScreenHeader";
 
@@ -48,36 +47,16 @@ interface FriendRequest {
 }
 
 export default function ProfileModal() {
-// Force-sync user profile to Firestore so they are searchable
-useEffect(() => {
-  if (!currentUser || !currentUser.email) return;
-
-  const syncProfile = async () => {
-    try {
-      const userDocRef = doc(db, "users", currentUser.uid);
-      await setDoc(
-        userDocRef,
-        {
-          uid: currentUser.uid,
-          email: currentUser.email.trim().toLowerCase(),
-          displayName: currentUser.displayName || "Chef",
-          photoURL: currentUser.photoURL || "",
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true } // Preserves existing subcollections/fields while writing missing email
-      );
-      console.log("Successfully synced profile for:", currentUser.email);
-    } catch (err) {
-      console.error("Error auto-syncing profile:", err);
-    }
-  };
-
-  syncProfile();
-}, [currentUser]);
-  
   const router = useRouter();
   const auth = getAuth();
   const currentUser = auth.currentUser;
+
+  // Local state for immediate UI feedback on photo change
+  const [photoURL, setPhotoURL] = useState<string>(
+    currentUser?.photoURL ||
+      "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200"
+  );
+  const [updatingPhoto, setUpdatingPhoto] = useState(false);
 
   // Search & Modal State
   const [isSearchVisible, setIsSearchVisible] = useState(false);
@@ -90,11 +69,95 @@ useEffect(() => {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [loadingSocial, setLoadingSocial] = useState(true);
 
+  // Force-sync user profile to Firestore so they are searchable
+  useEffect(() => {
+    if (!currentUser || !currentUser.email) return;
+
+    const syncProfile = async () => {
+      try {
+        const userDocRef = doc(db, "users", currentUser.uid);
+        await setDoc(
+          userDocRef,
+          {
+            uid: currentUser.uid,
+            email: currentUser.email.trim().toLowerCase(),
+            displayName: currentUser.displayName || "Chef",
+            photoURL: photoURL,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.error("Error auto-syncing profile:", err);
+      }
+    };
+
+    syncProfile();
+  }, [currentUser, photoURL]);
+
+  // Handle Image Selection & Upload
+  const handleEditProfilePicture = async () => {
+    if (!currentUser) return;
+
+    // Request permissions
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission Denied",
+        "Permission to access camera roll is required to update your profile photo."
+      );
+      return;
+    }
+
+    // Pick Image
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (pickerResult.canceled || !pickerResult.assets[0].uri) {
+      return;
+    }
+
+    const selectedUri = pickerResult.assets[0].uri;
+    setUpdatingPhoto(true);
+
+    try {
+      // 1. Update Firebase Auth Profile
+      await updateProfile(currentUser, {
+        photoURL: selectedUri,
+      });
+
+      // 2. Update Firestore User Document
+      const userDocRef = doc(db, "users", currentUser.uid);
+      await setDoc(
+        userDocRef,
+        {
+          photoURL: selectedUri,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      // 3. Update Local UI State
+      setPhotoURL(selectedUri);
+      Alert.alert("Success", "Profile picture updated successfully!");
+    } catch (err) {
+      console.error("Error updating profile picture:", err);
+      Alert.alert("Error", "Failed to update profile picture. Please try again.");
+    } finally {
+      setUpdatingPhoto(false);
+    }
+  };
+
   // Listen to current user's friends and requests
   useEffect(() => {
     if (!currentUser) return;
 
-    // 1. Listen for Incoming Friend Requests
     const reqRef = collection(db, "users", currentUser.uid, "friendRequests");
     const unsubscribeReqs = onSnapshot(reqRef, (snapshot) => {
       const reqs: FriendRequest[] = snapshot.docs.map((d) => ({
@@ -104,7 +167,6 @@ useEffect(() => {
       setFriendRequests(reqs);
     });
 
-    // 2. Listen for Friends List
     const friendsRef = collection(db, "users", currentUser.uid, "friends");
     const unsubscribeFriends = onSnapshot(friendsRef, (snapshot) => {
       const friendsList: FriendUser[] = snapshot.docs.map((d) => ({
@@ -122,7 +184,6 @@ useEffect(() => {
   }, [currentUser]);
 
   // Search user by email
-// Search user by email
   const handleSearchUser = async () => {
     if (!searchEmail.trim()) {
       Alert.alert("Error", "Please enter an email address.");
@@ -138,13 +199,7 @@ useEffect(() => {
     setFoundUser(null);
 
     try {
-      // --- DEBUG CHECK ---
-      // Fetch all docs to see if the users collection has data
       const usersRef = collection(db, "users");
-      const allDocs = await getDocs(usersRef);
-      console.log("All users in DB:", allDocs.docs.map((d) => d.data()));
-      // --------------------
-
       const q = query(
         usersRef,
         where("email", "==", searchEmail.trim().toLowerCase())
@@ -162,18 +217,20 @@ useEffect(() => {
       }
     } catch (err) {
       console.error("Error searching user:", err);
-      Alert.alert("Error", `Failed to search: ${err instanceof Error ? err.message : err}`);
+      Alert.alert(
+        "Error",
+        `Failed to search: ${err instanceof Error ? err.message : err}`
+      );
     } finally {
       setSearchLoading(false);
     }
   };
 
-  // Send friend request to target chef
+  // Send friend request
   const handleSendRequest = async () => {
     if (!currentUser || !foundUser) return;
 
     try {
-      // Document path: /users/{targetUid}/friendRequests/{currentUserUid}
       const targetReqRef = doc(
         db,
         "users",
@@ -200,12 +257,11 @@ useEffect(() => {
     }
   };
 
-  // Accept incoming friend request
+  // Accept friend request
   const handleAcceptRequest = async (request: FriendRequest) => {
     if (!currentUser) return;
 
     try {
-      // Add to my friends list
       const myFriendRef = doc(db, "users", currentUser.uid, "friends", request.fromUid);
       await setDoc(myFriendRef, {
         uid: request.fromUid,
@@ -213,7 +269,6 @@ useEffect(() => {
         displayName: request.fromName || "Chef",
       });
 
-      // Add to sender's friends list
       const targetFriendRef = doc(db, "users", request.fromUid, "friends", currentUser.uid);
       await setDoc(targetFriendRef, {
         uid: currentUser.uid,
@@ -221,7 +276,6 @@ useEffect(() => {
         displayName: currentUser.displayName || "Chef",
       });
 
-      // Delete request document
       const reqRef = doc(db, "users", currentUser.uid, "friendRequests", request.id);
       await deleteDoc(reqRef);
 
@@ -251,16 +305,23 @@ useEffect(() => {
 
         {/* Profile Header */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatarWrapper}>
-            <Image
-              source={{
-                uri:
-                  currentUser?.photoURL ||
-                  "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200",
-              }}
-              style={styles.avatar}
-            />
-          </View>
+          <Pressable
+            style={styles.avatarWrapper}
+            onPress={handleEditProfilePicture}
+            disabled={updatingPhoto}
+          >
+            <Image source={{ uri: photoURL }} style={styles.avatar} />
+            
+            {/* Camera Overlay Badge */}
+            <View style={styles.cameraBadge}>
+              {updatingPhoto ? (
+                <ActivityIndicator size="small" color="#0f1115" />
+              ) : (
+                <FontAwesome name="camera" size={12} color="#0f1115" />
+              )}
+            </View>
+          </Pressable>
+
           <Text style={styles.name}>
             {currentUser?.displayName || "Chef Josh"}
           </Text>
@@ -340,7 +401,7 @@ useEffect(() => {
           ) : friends.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyText}>
-                No friends added yet. Tap "Find a Chef" above to connect with peers!
+                No friends added yet. Tap "Friend a Chef" above to connect with peers!
               </Text>
             </View>
           ) : (
@@ -429,7 +490,6 @@ useEffect(() => {
               )}
             </Pressable>
 
-            {/* Found User Result */}
             {foundUser && (
               <View style={styles.foundUserCard}>
                 <View style={styles.iconCircle}>
@@ -486,11 +546,25 @@ const styles = StyleSheet.create({
     borderColor: "#f59e0b",
     marginBottom: 12,
     backgroundColor: "#181b20",
+    position: "relative",
   },
   avatar: {
     width: 90,
     height: 90,
     borderRadius: 45,
+  },
+  cameraBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    backgroundColor: "#f59e0b",
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#0f1115",
   },
   name: {
     fontSize: 22,
@@ -674,7 +748,6 @@ const styles = StyleSheet.create({
     color: "#a1a1aa",
     fontSize: 12,
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.75)",

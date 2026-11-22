@@ -21,13 +21,13 @@
       }
     },
     "android": {
+      "package": "com.blaszen.gastro",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.blaszen.gastro"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "bundler": "metro",
