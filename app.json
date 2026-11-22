@@ -42,6 +42,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "blaszen",
+    "extra": {
+      "eas": {
+        "projectId": "56e24f30-1c89-48dd-84d4-8e4d36621cea"
+      }
     }
   }
 }
