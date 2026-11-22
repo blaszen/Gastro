@@ -9,7 +9,7 @@ const BASE = "https://api.spoonacular.com";
 const SEARCH_PARAMS = ["query", "number", "offset", "addRecipeInformation", "fillIngredients"];
 
 export const spoonacularSearch = onCall(
-  { secrets: [SPOONACULAR_KEY], enforceAppCheck: true, maxInstances: 10 },
+  { secrets: [SPOONACULAR_KEY], maxInstances: 10 },
   async (req) => {
     if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required.");
     const params = new URLSearchParams({ apiKey: SPOONACULAR_KEY.value() });
@@ -24,7 +24,7 @@ export const spoonacularSearch = onCall(
 );
 
 export const spoonacularRecipe = onCall(
-  { secrets: [SPOONACULAR_KEY], enforceAppCheck: true, maxInstances: 10 },
+  { secrets: [SPOONACULAR_KEY], maxInstances: 10 },
   async (req) => {
     if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required.");
     const id = String(req.data?.id ?? "");
