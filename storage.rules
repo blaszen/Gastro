@@ -9,14 +9,14 @@ service firebase.storage {
     }
 
     // Profile photos: anyone signed in can view; only the owner can change.
-    match /users/{uid}/{fileName} {
+    match /users/{uid}/{allPaths=**} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == uid && isImageUnder5MB();
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // Recipe photos: anyone signed in can view; only the uploader can write.
-    match /recipeImages/{uid}/{fileName} {
+    match /recipeImages/{uid}/{allPaths=**} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == uid && isImageUnder5MB();
       allow delete: if request.auth != null && request.auth.uid == uid;

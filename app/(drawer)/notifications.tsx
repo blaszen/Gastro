@@ -23,6 +23,28 @@ import {
 } from "firebase/firestore";
 import { db } from "../../lib/firebase"; // Adjust path to your firebase config
 import ScreenHeader from "../../components/ScreenHeader";
+import RecipeImage from "../../components/RecipeImage";
+import {
+  ActivityItem,
+  markNotificationsSeen,
+  useActivityFeed,
+  useNotificationsSeenAt,
+} from "../../lib/notifications";
+import { useBlockedIds } from "../../lib/moderation";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
+
+const timeAgo = (d: Date | null) => {
+  if (!d) return "Just now";
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return "Just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString();
+};
 
 interface FriendRequest {
   id: string;
@@ -34,11 +56,60 @@ interface FriendRequest {
 }
 
 export default function NotificationsModalScreen() {
+  useThemeMode();
   const router = useRouter();
   const auth = getAuth();
   const currentUser = auth.currentUser;
 
-  const [activeTab, setActiveTab] = useState<"incoming" | "sent">("incoming");
+  const [activeTab, setActiveTab] = useState<"activity" | "incoming">("activity");
+  const { items: allActivity, loading: activityLoading } = useActivityFeed(currentUser?.uid);
+  const blockedIds = useBlockedIds(currentUser?.uid);
+  const activity = allActivity.filter((a) => !blockedIds.has(a.authorId));
+  const seenAt = useNotificationsSeenAt(currentUser?.uid);
+  // Remember what was "new" when the screen opened so highlights don't vanish instantly.
+  const [highlightSince, setHighlightSince] = useState<Date | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (highlightSince === undefined && seenAt !== null) setHighlightSince(seenAt);
+  }, [seenAt]);
+
+  // Opening this screen marks everything as seen.
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    const t = setTimeout(() => markNotificationsSeen(currentUser.uid), 1500);
+    return () => clearTimeout(t);
+  }, [currentUser?.uid]);
+
+  const renderActivity = ({ item }: { item: ActivityItem }) => {
+    const isNew =
+      !item.isMine && !!item.createdAt && (!highlightSince || item.createdAt > highlightSince);
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.activityCard, isNew && styles.activityCardNew, pressed && { opacity: 0.8 }]}
+        onPress={() => router.push(`/recipe/${item.id}` as any)}
+      >
+        <RecipeImage uri={item.imageUrl} style={styles.activityThumb} iconSize={16} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.activityText} numberOfLines={2}>
+            {item.isMine ? (
+              <>
+                You {item.isPublic ? "published" : "saved"}{" "}
+                <Text style={styles.activityStrong}>{item.title}</Text>
+                {item.isPublic ? " to the Community Feed" : " privately"}
+              </>
+            ) : (
+              <>
+                <Text style={styles.activityStrong}>{item.authorName}</Text> shared{" "}
+                <Text style={styles.activityStrong}>{item.title}</Text>
+              </>
+            )}
+          </Text>
+          <Text style={styles.activityTime}>{timeAgo(item.createdAt)}</Text>
+        </View>
+        {isNew ? <View style={styles.newDot} /> : null}
+      </Pressable>
+    );
+  };
   const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -162,32 +233,54 @@ export default function NotificationsModalScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
-      <ScreenHeader title="Notifications" subtitle="Friend requests & activity" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
+      <ScreenHeader title="Notifications" subtitle="Recipes & friend requests" />
       <View style={styles.container}>
 
         {/* Tab Switcher */}
         <View style={styles.tabContainer}>
-          <Pressable
-            style={[
-              styles.tabBtn,
-              activeTab === "incoming" && styles.activeTabBtn,
-            ]}
-            onPress={() => setActiveTab("incoming")}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "incoming" && styles.activeTabText,
-              ]}
+          {([
+            ["activity", "Activity"],
+            ["incoming", `Requests${incomingRequests.length ? ` (${incomingRequests.length})` : ""}`],
+          ] as const).map(([key, label]) => (
+            <Pressable
+              key={key}
+              style={[styles.tabBtn, activeTab === key && styles.activeTabBtn]}
+              onPress={() => setActiveTab(key)}
             >
-              Requests ({incomingRequests.length})
-            </Text>
-          </Pressable>
+              <Text style={[styles.tabText, activeTab === key && styles.activeTabText]}>{label}</Text>
+            </Pressable>
+          ))}
         </View>
 
+        {activeTab === "activity" ? (
+          activityLoading ? (
+            <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color="#f59e0b" />
+            </View>
+          ) : (
+            <FlatList
+              data={activity}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContent}
+              renderItem={renderActivity}
+              ListEmptyComponent={
+                <View style={styles.centerContainer}>
+                  <View style={styles.emptyIconCircle}>
+                    <MaterialCommunityIcons name="silverware-fork-knife" size={30} color="#71717a" />
+                  </View>
+                  <Text style={styles.emptyTitle}>No activity yet</Text>
+                  <Text style={styles.emptySubtitle}>
+                    New recipes from you and the community will show up here.
+                  </Text>
+                </View>
+              }
+            />
+          )
+        ) : null}
+
         {/* Content Section */}
-        {loading ? (
+        {activeTab !== "incoming" ? null : loading ? (
           <View style={styles.centerContainer}>
             <ActivityIndicator size="large" color="#f59e0b" />
           </View>
@@ -236,7 +329,7 @@ export default function NotificationsModalScreen() {
                       style={styles.acceptBtn}
                       onPress={() => handleAcceptRequest(item)}
                     >
-                      <FontAwesome name="check" size={14} color="#0f1115" />
+                      <FontAwesome name="check" size={14} color={tc("#0f1115")} />
                     </Pressable>
                     <Pressable
                       style={styles.declineBtn}
@@ -255,7 +348,24 @@ export default function NotificationsModalScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
+  activityCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 10,
+  },
+  activityCardNew: { borderColor: "rgba(245, 158, 11, 0.4)" },
+  activityThumb: { width: 52, height: 52, borderRadius: 10 },
+  activityText: { color: "#a1a1aa", fontSize: 14, lineHeight: 19 },
+  activityStrong: { color: "#f4f4f5", fontWeight: "700" },
+  activityTime: { color: "#71717a", fontSize: 12, marginTop: 4 },
+  newDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#f59e0b" },
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",

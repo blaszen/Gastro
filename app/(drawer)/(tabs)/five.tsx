@@ -19,6 +19,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useFocusEffect } from "@react-navigation/native";
 import { fetchUserFavorites, toggleFavoriteRecipe } from "../../../lib/favorites";
 import { getRecipeInformation } from "../../../lib/spoonacular";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../lib/theme";
 
 interface ExtendedIngredient {
   id: number;
@@ -53,6 +54,7 @@ interface Recipe {
 }
 
 export default function FavoritesScreen() {
+  useThemeMode();
   const [favorites, setFavorites] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -153,7 +155,7 @@ export default function FavoritesScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
       {/* HEADER */}
       <View style={styles.header}>
@@ -188,7 +190,7 @@ export default function FavoritesScreen() {
         {!loading && favorites.length === 0 && (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconWrapper}>
-              <FontAwesome name="heart-o" size={32} color="#3f3f46" />
+              <FontAwesome name="heart-o" size={32} color={tc("#3f3f46")} />
             </View>
             <Text style={styles.emptyTitle}>No Favorites Saved Yet</Text>
             <Text style={styles.emptySubtext}>
@@ -278,7 +280,7 @@ export default function FavoritesScreen() {
       {/* FULL RECIPE DETAIL MODAL */}
       <Modal visible={recipeModalVisible} animationType="slide" transparent={false}>
         <SafeAreaView style={styles.recipeModalContainer}>
-          <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+          <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
           {/* Modal Header Controls */}
           <View style={styles.recipeModalHeader}>
@@ -305,7 +307,7 @@ export default function FavoritesScreen() {
                   onPress={() => handleOpenExternalLink(selectedRecipe.sourceUrl)}
                   style={styles.externalLinkBtn}
                 >
-                  <FontAwesome name="external-link" size={14} color="#a1a1aa" />
+                  <FontAwesome name="external-link" size={14} color={tc("#a1a1aa")} />
                 </Pressable>
               )}
             </View>
@@ -420,7 +422,7 @@ export default function FavoritesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",

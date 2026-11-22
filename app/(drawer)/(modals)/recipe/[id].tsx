@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   SafeAreaView,
@@ -11,12 +12,18 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot, deleteDoc } from "firebase/firestore";
+import { ref as storageRef, deleteObject } from "firebase/storage";
 import { MaterialCommunityIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
-import { db } from "../../../../lib/firebase";
+import { db, auth, storage } from "../../../../lib/firebase";
+import { addItemsToList } from "../../../../lib/grocery";
+import { REPORT_REASONS, blockUser, reportRecipe } from "../../../../lib/moderation";
+import RecipeImage from "../../../../components/RecipeImage";
 import ShareRecipeModal from "../../../../components/ShareRecipeModal"; // Adjust path to ShareRecipeModal if needed
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../../lib/theme";
 
 export default function RecipeModal() {
+  useThemeMode();
   const { id } = useLocalSearchParams();
   const router = useRouter();
 
@@ -24,23 +31,139 @@ export default function RecipeModal() {
   const [loading, setLoading] = useState(true);
   const [shareModalVisible, setShareModalVisible] = useState(false);
 
+  const [busy, setBusy] = useState<"grocery" | "delete" | null>(null);
+  const isOwner = !!recipe && recipe.userId === auth.currentUser?.uid;
+
+  // Live so edits made elsewhere show up immediately.
   useEffect(() => {
-    async function fetchRecipe() {
-      if (!id || typeof id !== "string") return;
-      try {
-        const ref = doc(db, "recipes", id);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          setRecipe(snap.data());
-        }
-      } catch (error) {
+    if (!id || typeof id !== "string") {
+      setLoading(false);
+      return;
+    }
+    return onSnapshot(
+      doc(db, "recipes", id),
+      (snap) => {
+        setRecipe(snap.exists() ? snap.data() : null);
+        setLoading(false);
+      },
+      (error) => {
         console.error("Error fetching recipe:", error);
-      } finally {
+        setRecipe(null);
         setLoading(false);
       }
-    }
-    fetchRecipe();
+    );
   }, [id]);
+
+  const handleAddToGrocery = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || ingredientsList.length === 0) return;
+    setBusy("grocery");
+    try {
+      const count = await addItemsToList(uid, ingredientsList, {
+        list: "grocery",
+        recipeId: typeof id === "string" ? id : null,
+        recipeTitle: recipe?.title || null,
+      });
+      Alert.alert(
+        "Added to grocery list",
+        `${count} ingredient${count === 1 ? "" : "s"} added.`,
+        [
+          { text: "OK", style: "cancel" },
+          { text: "View List", onPress: () => router.push("/grocery" as any) },
+        ]
+      );
+    } catch (err) {
+      console.error("Add to grocery failed:", err);
+      Alert.alert("Error", "Couldn't add ingredients to your list.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleReport = () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !recipe) return;
+    Alert.alert("Report recipe", "Why are you reporting this recipe?", [
+      ...REPORT_REASONS.map((reason) => ({
+        text: reason,
+        onPress: async () => {
+          try {
+            await reportRecipe(uid, { id: String(id), title: recipe.title, userId: recipe.userId }, reason);
+            Alert.alert("Thanks for reporting", "We'll review this recipe within 24 hours.");
+          } catch (err) {
+            console.error("Report failed:", err);
+            Alert.alert("Error", "Couldn't send your report. Please try again.");
+          }
+        },
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
+  };
+
+  const handleBlock = () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !recipe?.userId) return;
+    const name = recipe.createdBy || "this chef";
+    Alert.alert(
+      `Block ${name}?`,
+      "You won't see their recipes in your feeds. You can unblock them in Settings.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await blockUser(uid, recipe.userId, recipe.createdBy);
+              if (router.canGoBack()) router.back();
+              else router.replace("/community" as any);
+            } catch (err) {
+              console.error("Block failed:", err);
+              Alert.alert("Error", "Couldn't block this chef. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMore = () => {
+    Alert.alert(recipe?.title || "Recipe", undefined, [
+      { text: "Report Recipe", onPress: handleReport },
+      { text: `Block ${recipe?.createdBy || "Chef"}`, style: "destructive", onPress: handleBlock },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const handleEdit = () => {
+    router.push({ pathname: "/(drawer)/(tabs)/three", params: { editId: String(id) } } as any);
+  };
+
+  const handleDelete = () => {
+    Alert.alert("Delete recipe?", "This permanently removes the recipe for everyone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setBusy("delete");
+          try {
+            const imageUrl: string | undefined = recipe?.imageUrl;
+            await deleteDoc(doc(db, "recipes", String(id)));
+            if (imageUrl?.includes("firebasestorage")) {
+              deleteObject(storageRef(storage, imageUrl)).catch(() => {});
+            }
+            if (router.canGoBack()) router.back();
+            else router.replace("/recipes" as any);
+          } catch (err) {
+            console.error("Delete failed:", err);
+            Alert.alert("Error", "Couldn't delete this recipe.");
+            setBusy(null);
+          }
+        },
+      },
+    ]);
+  };
 
   const formatAuthorName = (name: string) => {
     if (!name) return "Chef";
@@ -57,7 +180,7 @@ export default function RecipeModal() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+        <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
         <ActivityIndicator size="large" color="#f59e0b" />
         <Text style={styles.loadingText}>Fetching recipe details...</Text>
       </View>
@@ -67,10 +190,10 @@ export default function RecipeModal() {
   if (!recipe) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+        <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
         <View style={styles.topBar}>
           <Pressable onPress={() => router.back()} style={styles.closeBtn}>
-            <Ionicons name="close" size={20} color="#a1a1aa" />
+            <Ionicons name="close" size={20} color={tc("#a1a1aa")} />
           </Pressable>
         </View>
         <View style={styles.emptyContainer}>
@@ -88,7 +211,7 @@ export default function RecipeModal() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
       {/* Top Action Bar */}
       <View style={styles.topBar}>
@@ -101,30 +224,35 @@ export default function RecipeModal() {
           <Text style={styles.shareBtnText}>Share</Text>
         </Pressable>
 
+        <View style={{ flexDirection: "row", gap: 10 }}>
+        {!isOwner ? (
+          <Pressable
+            onPress={handleMore}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+            accessibilityLabel="More options"
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={tc("#a1a1aa")} />
+          </Pressable>
+        ) : null}
         {/* Close Button */}
         <Pressable
           onPress={() => router.back()}
           style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
         >
-          <Ionicons name="close" size={20} color="#a1a1aa" />
+          <Ionicons name="close" size={20} color={tc("#a1a1aa")} />
         </Pressable>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Banner / Image Header */}
         <View style={styles.imageContainer}>
-          {recipe.imageUrl ? (
-            <Image source={{ uri: recipe.imageUrl }} style={styles.image} />
-          ) : (
-            <View style={styles.placeholderBanner}>
-              <View style={styles.iconCircle}>
-                <MaterialCommunityIcons name="chef-hat" size={32} color="#f59e0b" />
-              </View>
-              <Text style={styles.placeholderTag} numberOfLines={1}>
-                {recipe.title || "Specialty Dish"}
-              </Text>
-            </View>
-          )}
+          <RecipeImage
+            uri={recipe.imageUrl}
+            title={recipe.title || "Specialty Dish"}
+            style={StyleSheet.absoluteFillObject}
+            iconSize={32}
+          />
 
           {/* Privacy Status Badge */}
           <View style={styles.privacyBadge}>
@@ -154,6 +282,68 @@ export default function RecipeModal() {
               Created by <Text style={styles.authorName}>{formatAuthorName(recipe.createdBy)}</Text>
             </Text>
           </View>
+        </View>
+
+        {/* Quick facts */}
+        {(recipe.prepTimeMinutes || recipe.servings) ? (
+          <View style={styles.metaRow}>
+            {recipe.prepTimeMinutes ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="time-outline" size={14} color="#f59e0b" />
+                <Text style={styles.metaChipText}>{recipe.prepTimeMinutes} min</Text>
+              </View>
+            ) : null}
+            {recipe.servings ? (
+              <View style={styles.metaChip}>
+                <Ionicons name="people-outline" size={14} color="#f59e0b" />
+                <Text style={styles.metaChipText}>
+                  {recipe.servings} serving{recipe.servings === 1 ? "" : "s"}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Actions */}
+        <View style={styles.actionRow}>
+          <Pressable
+            style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed, (busy || ingredientsList.length === 0) && styles.disabled]}
+            onPress={handleAddToGrocery}
+            disabled={!!busy || ingredientsList.length === 0}
+          >
+            {busy === "grocery" ? (
+              <ActivityIndicator size="small" color={tc("#0f1115")} />
+            ) : (
+              <>
+                <FontAwesome name="shopping-basket" size={14} color={tc("#0f1115")} />
+                <Text style={styles.primaryActionText}>Add to Grocery List</Text>
+              </>
+            )}
+          </Pressable>
+          {isOwner ? (
+            <>
+              <Pressable
+                style={({ pressed }) => [styles.iconAction, pressed && styles.pressed]}
+                onPress={handleEdit}
+                disabled={!!busy}
+                accessibilityLabel="Edit recipe"
+              >
+                <FontAwesome name="pencil" size={15} color={tc("#f4f4f5")} />
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.iconAction, styles.iconActionDanger, pressed && styles.pressed]}
+                onPress={handleDelete}
+                disabled={!!busy}
+                accessibilityLabel="Delete recipe"
+              >
+                {busy === "delete" ? (
+                  <ActivityIndicator size="small" color="#ef4444" />
+                ) : (
+                  <FontAwesome name="trash-o" size={15} color="#ef4444" />
+                )}
+              </Pressable>
+            </>
+          ) : null}
         </View>
 
         {/* Ingredients Section */}
@@ -214,7 +404,44 @@ export default function RecipeModal() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
+  disabled: { opacity: 0.5 },
+  metaRow: { flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" },
+  metaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  metaChipText: { color: "#f4f4f5", fontSize: 13, fontWeight: "600" },
+  actionRow: { flexDirection: "row", gap: 10, marginBottom: 24 },
+  primaryAction: {
+    flex: 1,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: "#f59e0b",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  primaryActionText: { color: "#0f1115", fontWeight: "800", fontSize: 14 },
+  iconAction: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconActionDanger: { borderColor: "rgba(239, 68, 68, 0.3)" },
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",

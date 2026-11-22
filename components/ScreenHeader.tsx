@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { themedStyles, tc, useThemeMode } from "../lib/theme";
 
 type Props = {
   title: string;
@@ -16,6 +17,7 @@ type Props = {
  * back/close control on the left, title (and optional subtitle) on the right.
  */
 export default function ScreenHeader({ title, subtitle, variant = "back", onBack }: Props) {
+  useThemeMode();
   const router = useRouter();
 
   const handleBack = () => {
@@ -36,7 +38,7 @@ export default function ScreenHeader({ title, subtitle, variant = "back", onBack
         <Ionicons
           name={variant === "close" ? "close" : "chevron-back"}
           size={20}
-          color="#f4f4f5"
+          color={tc("#f4f4f5")}
         />
       </Pressable>
 
@@ -55,7 +57,7 @@ export default function ScreenHeader({ title, subtitle, variant = "back", onBack
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   header: {
     flexDirection: "row",
     alignItems: "center",

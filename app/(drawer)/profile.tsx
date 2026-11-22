@@ -26,11 +26,14 @@ import {
   where,
   getDocs,
   onSnapshot,
+  orderBy,
 } from "firebase/firestore";
 import * as ImagePicker from "expo-image-picker";
 import { db } from "../../lib/firebase";
 import ScreenHeader from "../../components/ScreenHeader";
-import { uploadImageAsync } from "../../lib/uploadImage";
+import { uploadImageAsync, isRemoteUrl } from "../../lib/uploadImage";
+import RecipeImage from "../../components/RecipeImage";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
 interface FriendUser {
   uid: string;
@@ -48,15 +51,107 @@ interface FriendRequest {
 }
 
 export default function ProfileModal() {
+  useThemeMode();
   const router = useRouter();
   const auth = getAuth();
   const currentUser = auth.currentUser;
 
   // Local state for immediate UI feedback on photo change
-  const [photoURL, setPhotoURL] = useState<string>(
-    currentUser?.photoURL ||
-      "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200"
-  );
+  const [photoURL, setPhotoURL] = useState<string>(currentUser?.photoURL || "");
+
+  // Profile details & activity stats
+  const [profile, setProfile] = useState<{
+    headline?: string;
+    bio?: string;
+    cuisines?: string;
+    location?: string;
+  }>({});
+  const [myRecipes, setMyRecipes] = useState<any[]>([]);
+  const [favoritesCount, setFavoritesCount] = useState(0);
+  const [editVisible, setEditVisible] = useState(false);
+  const [draft, setDraft] = useState({ displayName: "", headline: "", bio: "", cuisines: "", location: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const memberSince = currentUser?.metadata?.creationTime
+    ? new Date(currentUser.metadata.creationTime).toLocaleDateString(undefined, {
+        month: "long",
+        year: "numeric",
+      })
+    : null;
+  const publicCount = myRecipes.filter((r) => r.isPublic).length;
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubProfile = onSnapshot(
+      doc(db, "users", currentUser.uid),
+      (snap) => setProfile((snap.data() as any) || {}),
+      () => {}
+    );
+    const unsubRecipes = onSnapshot(
+      query(
+        collection(db, "recipes"),
+        where("userId", "==", currentUser.uid),
+        orderBy("createdAt", "desc")
+      ),
+      (snap) => setMyRecipes(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      () => {}
+    );
+    const unsubFavs = onSnapshot(
+      collection(db, "users", currentUser.uid, "favorites"),
+      (snap) => setFavoritesCount(snap.size),
+      () => {}
+    );
+    return () => {
+      unsubProfile();
+      unsubRecipes();
+      unsubFavs();
+    };
+  }, [currentUser?.uid]);
+
+  const openEditProfile = () => {
+    setDraft({
+      displayName: currentUser?.displayName || "",
+      headline: profile.headline || "",
+      bio: profile.bio || "",
+      cuisines: profile.cuisines || "",
+      location: profile.location || "",
+    });
+    setEditVisible(true);
+  };
+
+  const saveProfile = async () => {
+    if (!currentUser) return;
+    const name = draft.displayName.trim();
+    if (!name) {
+      Alert.alert("Name required", "Please enter a display name.");
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      if (name !== currentUser.displayName) {
+        await updateProfile(currentUser, { displayName: name });
+      }
+      await setDoc(
+        doc(db, "users", currentUser.uid),
+        {
+          uid: currentUser.uid,
+          displayName: name,
+          headline: draft.headline.trim().slice(0, 60),
+          bio: draft.bio.trim().slice(0, 300),
+          cuisines: draft.cuisines.trim().slice(0, 80),
+          location: draft.location.trim().slice(0, 60),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      setEditVisible(false);
+    } catch (err) {
+      console.error("Profile save failed:", err);
+      Alert.alert("Error", "Couldn't save your profile. Please try again.");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
   const [updatingPhoto, setUpdatingPhoto] = useState(false);
 
   // Search & Modal State
@@ -311,7 +406,7 @@ export default function ProfileModal() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
       <ScreenHeader title="My Profile" />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
@@ -322,38 +417,55 @@ export default function ProfileModal() {
             onPress={handleEditProfilePicture}
             disabled={updatingPhoto}
           >
-            <Image source={{ uri: photoURL }} style={styles.avatar} />
+            {isRemoteUrl(photoURL) ? (
+              <Image source={{ uri: photoURL }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                <Text style={styles.avatarInitial}>
+                  {(currentUser?.displayName || currentUser?.email || "C").charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
             
             {/* Camera Overlay Badge */}
             <View style={styles.cameraBadge}>
               {updatingPhoto ? (
-                <ActivityIndicator size="small" color="#0f1115" />
+                <ActivityIndicator size="small" color={tc("#0f1115")} />
               ) : (
-                <FontAwesome name="camera" size={12} color="#0f1115" />
+                <FontAwesome name="camera" size={12} color={tc("#0f1115")} />
               )}
             </View>
           </Pressable>
 
           <Text style={styles.name}>
-            {currentUser?.displayName || "Chef Josh"}
+            {currentUser?.displayName || "Add your name"}
           </Text>
-          <Text style={styles.role}>Head Chef & Culinary Director</Text>
+          <Text style={styles.role}>{profile.headline || "Home Cook"}</Text>
+          {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
         </View>
 
-        {/* Action: Find a Chef */}
-        <Pressable
-          style={styles.findChefBtn}
-          onPress={() => setIsSearchVisible(true)}
-        >
-          <FontAwesome name="user-plus" size={16} color="#0f1115" />
-          <Text style={styles.findChefBtnText}>Friend a Chef</Text>
-        </Pressable>
+        {/* Actions */}
+        <View style={styles.actionsRow}>
+          <Pressable style={[styles.findChefBtn, { flex: 1 }]} onPress={() => setIsSearchVisible(true)}>
+            <FontAwesome name="user-plus" size={16} color={tc("#0f1115")} />
+            <Text style={styles.findChefBtnText}>Friend a Chef</Text>
+          </Pressable>
+          <Pressable style={styles.editProfileBtn} onPress={openEditProfile}>
+            <FontAwesome name="pencil" size={14} color={tc("#f4f4f5")} />
+            <Text style={styles.editProfileText}>Edit</Text>
+          </Pressable>
+        </View>
 
         {/* Stats Section */}
         <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statNum}>24</Text>
+          <Pressable style={styles.statBox} onPress={() => router.push("/recipes" as any)}>
+            <Text style={styles.statNum}>{myRecipes.length}</Text>
             <Text style={styles.statLabel}>Recipes</Text>
+          </Pressable>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statNum}>{publicCount}</Text>
+            <Text style={styles.statLabel}>Shared</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
@@ -362,8 +474,8 @@ export default function ProfileModal() {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <Text style={styles.statNum}>18</Text>
-            <Text style={styles.statLabel}>Prep Lists</Text>
+            <Text style={styles.statNum}>{favoritesCount}</Text>
+            <Text style={styles.statLabel}>Favorites</Text>
           </View>
         </View>
 
@@ -385,7 +497,7 @@ export default function ProfileModal() {
                     style={styles.acceptBtn}
                     onPress={() => handleAcceptRequest(req)}
                   >
-                    <FontAwesome name="check" size={12} color="#0f1115" />
+                    <FontAwesome name="check" size={12} color={tc("#0f1115")} />
                   </Pressable>
                   <Pressable
                     style={styles.declineBtn}
@@ -435,11 +547,45 @@ export default function ProfileModal() {
           )}
         </View>
 
-        {/* Preferences Section */}
+        {/* Recent recipes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.amberAccentBar} />
-            <Text style={styles.sectionTitle}>Preferences</Text>
+            <Text style={styles.sectionTitle}>Recent Recipes</Text>
+          </View>
+          {myRecipes.length === 0 ? (
+            <Pressable style={styles.emptyCard} onPress={() => router.push("/(drawer)/(tabs)/three" as any)}>
+              <Text style={styles.emptyText}>
+                You haven't created a recipe yet. Tap here to make your first one!
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.infoCard}>
+              {myRecipes.slice(0, 3).map((r) => (
+                <Pressable
+                  key={r.id}
+                  style={styles.friendRow}
+                  onPress={() => router.push(`/recipe/${r.id}` as any)}
+                >
+                  <RecipeImage uri={r.imageUrl} style={styles.recipeThumb} iconSize={14} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.friendName} numberOfLines={1}>
+                      {r.title || "Untitled recipe"}
+                    </Text>
+                    <Text style={styles.friendEmail}>{r.isPublic ? "Public" : "Private"}</Text>
+                  </View>
+                  <FontAwesome name="chevron-right" size={12} color={tc("#52525b")} />
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* About section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.amberAccentBar} />
+            <Text style={styles.sectionTitle}>About</Text>
           </View>
 
           <View style={styles.infoCard}>
@@ -448,15 +594,28 @@ export default function ProfileModal() {
                 <FontAwesome name="cutlery" size={14} color="#f59e0b" />
               </View>
               <Text style={styles.infoText}>
-                Cuisine Focus: Modern American & Italian
+                {profile.cuisines ? `Cuisine focus: ${profile.cuisines}` : "Add your favorite cuisines"}
               </Text>
             </View>
-
             <View style={styles.infoRow}>
               <View style={styles.iconCircle}>
                 <FontAwesome name="map-marker" size={14} color="#f59e0b" />
               </View>
-              <Text style={styles.infoText}>San Diego, CA</Text>
+              <Text style={styles.infoText}>{profile.location || "Add your location"}</Text>
+            </View>
+            {memberSince ? (
+              <View style={styles.infoRow}>
+                <View style={styles.iconCircle}>
+                  <FontAwesome name="calendar" size={13} color="#f59e0b" />
+                </View>
+                <Text style={styles.infoText}>Member since {memberSince}</Text>
+              </View>
+            ) : null}
+            <View style={styles.infoRow}>
+              <View style={styles.iconCircle}>
+                <FontAwesome name="envelope-o" size={13} color="#f59e0b" />
+              </View>
+              <Text style={styles.infoText}>{currentUser?.email}</Text>
             </View>
           </View>
         </View>
@@ -469,7 +628,7 @@ export default function ProfileModal() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Find a Chef</Text>
               <Pressable onPress={() => setIsSearchVisible(false)}>
-                <FontAwesome name="times" size={18} color="#a1a1aa" />
+                <FontAwesome name="times" size={18} color={tc("#a1a1aa")} />
               </Pressable>
             </View>
 
@@ -496,7 +655,7 @@ export default function ProfileModal() {
               disabled={searchLoading}
             >
               {searchLoading ? (
-                <ActivityIndicator size="small" color="#0f1115" />
+                <ActivityIndicator size="small" color={tc("#0f1115")} />
               ) : (
                 <Text style={styles.searchSubmitBtnText}>Search User</Text>
               )}
@@ -521,11 +680,89 @@ export default function ProfileModal() {
           </View>
         </View>
       </Modal>
+
+      {/* EDIT PROFILE MODAL */}
+      <Modal visible={editVisible} animationType="slide" transparent onRequestClose={() => setEditVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Profile</Text>
+              <Pressable onPress={() => setEditVisible(false)} hitSlop={10}>
+                <FontAwesome name="times" size={18} color={tc("#a1a1aa")} />
+              </Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }}>
+              {([
+                ["displayName", "Display name", "e.g. Josh", 40, false],
+                ["headline", "Headline", "e.g. Sous Chef, Home Baker", 60, false],
+                ["bio", "Bio", "A little about your cooking", 300, true],
+                ["cuisines", "Favorite cuisines", "e.g. Mexican, Italian", 80, false],
+                ["location", "Location", "e.g. San Diego, CA", 60, false],
+              ] as const).map(([key, label, placeholder, max, multiline]) => (
+                <View key={key} style={{ marginBottom: 12 }}>
+                  <Text style={styles.editLabel}>{label}</Text>
+                  <TextInput
+                    style={[styles.editInput, multiline && styles.editInputMulti]}
+                    value={(draft as any)[key]}
+                    onChangeText={(t) => setDraft((d) => ({ ...d, [key]: t }))}
+                    placeholder={placeholder}
+                    placeholderTextColor="#71717a"
+                    maxLength={max}
+                    multiline={multiline}
+                    textAlignVertical={multiline ? "top" : "center"}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+            <Pressable
+              style={[styles.searchSubmitBtn, savingProfile && { opacity: 0.6 }]}
+              onPress={saveProfile}
+              disabled={savingProfile}
+            >
+              {savingProfile ? (
+                <ActivityIndicator size="small" color={tc("#0f1115")} />
+              ) : (
+                <Text style={styles.searchSubmitBtnText}>Save Profile</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
+  avatarFallback: { backgroundColor: "#27272a", alignItems: "center", justifyContent: "center" },
+  avatarInitial: { color: "#f59e0b", fontSize: 34, fontWeight: "800" },
+  bio: { color: "#a1a1aa", fontSize: 14, textAlign: "center", marginTop: 8, lineHeight: 20, paddingHorizontal: 12 },
+  actionsRow: { flexDirection: "row", gap: 10, marginBottom: 4 },
+  editProfileBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#27272a",
+    backgroundColor: "#181b20",
+    marginBottom: 20,
+  },
+  editProfileText: { color: "#f4f4f5", fontWeight: "700", fontSize: 14 },
+  recipeThumb: { width: 40, height: 40, borderRadius: 10 },
+  editLabel: { color: "#a1a1aa", fontSize: 12, fontWeight: "700", marginBottom: 6 },
+  editInput: {
+    backgroundColor: "#0f1115",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    minHeight: 46,
+    color: "#f4f4f5",
+    fontSize: 15,
+  },
+  editInputMulti: { minHeight: 90, paddingTop: 12 },
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",

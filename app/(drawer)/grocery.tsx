@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   Pressable,
   TextInput,
   KeyboardAvoidingView,
@@ -12,12 +12,11 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  Share,
+  Modal,
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useRouter } from "expo-router";
-
-// Firebase Imports
 import {
   collection,
   onSnapshot,
@@ -32,454 +31,617 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
+import { AISLES, GroceryItem, ListType, guessAisle, listToText } from "../../lib/grocery";
 import ScreenHeader from "../../components/ScreenHeader";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
-interface GroceryItem {
-  id: string;
-  name: string;
-  checked: boolean;
-  createdAt?: any;
-}
+const LISTS: { value: ListType; label: string; icon: any }[] = [
+  { value: "grocery", label: "Grocery", icon: "shopping-basket" },
+  { value: "prep", label: "Prep", icon: "list-ul" },
+];
 
-export default function GroceryModal() {
-  const router = useRouter();
+export default function GroceryScreen() {
+  useThemeMode();
+  const uid = auth.currentUser?.uid;
   const [items, setItems] = useState<GroceryItem[]>([]);
-  const [newItemText, setNewItemText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [activeList, setActiveList] = useState<ListType>("grocery");
+  const [newName, setNewName] = useState("");
+  const [newQty, setNewQty] = useState("");
+  const [editing, setEditing] = useState<GroceryItem | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editQty, setEditQty] = useState("");
 
-  // 1. REAL-TIME LISTENER
+  // Real-time listener for this user's items
   useEffect(() => {
-    const uid = auth.currentUser?.uid;
     if (!uid) {
       setLoading(false);
       return;
     }
-
-    // Each user's own items, newest first
     const q = query(
       collection(db, "groceryItems"),
       where("createdBy", "==", uid),
       orderBy("createdAt", "desc")
     );
-
-    const unsubscribe = onSnapshot(
+    return onSnapshot(
       q,
       (snapshot) => {
-        const fetchedItems: GroceryItem[] = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...(docSnap.data() as Omit<GroceryItem, "id">),
-        }));
-        setItems(fetchedItems);
+        setItems(
+          snapshot.docs.map((d) => {
+            const data = d.data() as any;
+            return {
+              id: d.id,
+              name: data.name || "",
+              quantity: data.quantity || "",
+              checked: !!data.checked,
+              list: data.list === "prep" ? "prep" : "grocery",
+              aisle: data.aisle || guessAisle(data.name || ""),
+              recipeId: data.recipeId ?? null,
+              recipeTitle: data.recipeTitle ?? null,
+              createdAt: data.createdAt,
+            } as GroceryItem;
+          })
+        );
         setLoading(false);
       },
-      (error) => {
-        console.error("Firestore grocery subscription error:", error);
+      (err) => {
+        console.error("Grocery listener error:", err);
         setLoading(false);
       }
     );
+  }, [uid]);
 
-    return () => unsubscribe();
-  }, []);
+  const listItems = useMemo(() => items.filter((i) => i.list === activeList), [items, activeList]);
+  const completedCount = listItems.filter((i) => i.checked).length;
+  const progress = listItems.length ? (completedCount / listItems.length) * 100 : 0;
 
-  // 2. TOGGLE CHECKED STATE
-  const toggleCheck = async (id: string, currentChecked: boolean) => {
-    try {
-      const itemRef = doc(db, "groceryItems", id);
-      await updateDoc(itemRef, {
-        checked: !currentChecked,
-      });
-    } catch (err) {
-      console.error("Error toggling item:", err);
-      Alert.alert("Error", "Could not update item.");
-    }
-  };
+  // Grocery groups by aisle; prep groups by recipe. Checked items sink to the end.
+  const sections = useMemo(() => {
+    const groups = new Map<string, GroceryItem[]>();
+    listItems.forEach((item) => {
+      const key =
+        activeList === "grocery" ? item.aisle || "Other" : item.recipeTitle || "General prep";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    });
+    const order =
+      activeList === "grocery"
+        ? (a: string, b: string) => AISLES.indexOf(a as any) - AISLES.indexOf(b as any)
+        : (a: string, b: string) =>
+            a === "General prep" ? -1 : b === "General prep" ? 1 : a.localeCompare(b);
+    return [...groups.keys()].sort(order).map((title) => ({
+      title,
+      data: groups.get(title)!.sort((a, b) => Number(a.checked) - Number(b.checked)),
+    }));
+  }, [listItems, activeList]);
 
-  // 3. ADD NEW ITEM
   const addItem = async () => {
-    if (!newItemText.trim() || !auth.currentUser) return;
-
-    const textToAdd = newItemText.trim();
-    setNewItemText(""); // Clear input immediately for snappy UI
-
+    const name = newName.trim();
+    if (!name || !uid) return;
+    setNewName("");
+    setNewQty("");
     try {
       await addDoc(collection(db, "groceryItems"), {
-        name: textToAdd,
+        name: name.slice(0, 200),
+        quantity: newQty.trim().slice(0, 40),
         checked: false,
-        createdBy: auth.currentUser.uid,
+        list: activeList,
+        aisle: guessAisle(name),
+        recipeId: null,
+        recipeTitle: null,
+        createdBy: uid,
         createdAt: serverTimestamp(),
       });
     } catch (err) {
       console.error("Error adding item:", err);
-      Alert.alert("Error", "Could not add item to list.");
+      Alert.alert("Error", "Could not add that item.");
     }
   };
 
-  // 4. DELETE SINGLE ITEM
-  const deleteItem = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, "groceryItems", id));
-    } catch (err) {
-      console.error("Error deleting item:", err);
-      Alert.alert("Error", "Could not delete item.");
-    }
+  const toggleCheck = (item: GroceryItem) =>
+    updateDoc(doc(db, "groceryItems", item.id), { checked: !item.checked }).catch(() =>
+      Alert.alert("Error", "Could not update item.")
+    );
+
+  const deleteItem = (id: string) =>
+    deleteDoc(doc(db, "groceryItems", id)).catch(() =>
+      Alert.alert("Error", "Could not delete item.")
+    );
+
+  const openEdit = (item: GroceryItem) => {
+    setEditing(item);
+    setEditName(item.name);
+    setEditQty(item.quantity || "");
   };
 
-  // 5. CLEAR ALL CHECKED ITEMS (Batch Delete)
-  const clearCompleted = async () => {
-    const checkedItems = items.filter((item) => item.checked);
-    if (checkedItems.length === 0) return;
-
+  const saveEdit = async () => {
+    if (!editing) return;
+    const name = editName.trim();
+    if (!name) return;
     try {
-      const batch = writeBatch(db);
-      checkedItems.forEach((item) => {
-        batch.delete(doc(db, "groceryItems", item.id));
+      await updateDoc(doc(db, "groceryItems", editing.id), {
+        name: name.slice(0, 200),
+        quantity: editQty.trim().slice(0, 40),
+        aisle: name !== editing.name ? guessAisle(name) : editing.aisle,
       });
-      await batch.commit();
-    } catch (err) {
-      console.error("Error clearing checked items:", err);
-      Alert.alert("Error", "Could not clear checked items.");
+      setEditing(null);
+    } catch {
+      Alert.alert("Error", "Could not save changes.");
     }
   };
 
-  const completedCount = items.filter((item) => item.checked).length;
-  const progressPercent =
-    items.length > 0 ? (completedCount / items.length) * 100 : 0;
+  const moveEditing = async () => {
+    if (!editing) return;
+    const target: ListType = editing.list === "grocery" ? "prep" : "grocery";
+    try {
+      await updateDoc(doc(db, "groceryItems", editing.id), { list: target });
+      setEditing(null);
+    } catch {
+      Alert.alert("Error", "Could not move item.");
+    }
+  };
+
+  const batchUpdate = async (targets: GroceryItem[], op: "delete" | "uncheck") => {
+    if (targets.length === 0) return;
+    try {
+      // Firestore batches hold up to 500 writes.
+      for (let i = 0; i < targets.length; i += 450) {
+        const batch = writeBatch(db);
+        targets.slice(i, i + 450).forEach((t) => {
+          const ref = doc(db, "groceryItems", t.id);
+          if (op === "delete") batch.delete(ref);
+          else batch.update(ref, { checked: false });
+        });
+        await batch.commit();
+      }
+    } catch (err) {
+      console.error("Batch update failed:", err);
+      Alert.alert("Error", "Could not update the list.");
+    }
+  };
+
+  const listLabel = activeList === "grocery" ? "grocery list" : "prep list";
+
+  const showMenu = () => {
+    Alert.alert(activeList === "grocery" ? "Grocery List" : "Prep List", undefined, [
+      {
+        text: "Share List",
+        onPress: () =>
+          Share.share({
+            message: listToText(
+              activeList === "grocery" ? "🛒 Grocery List" : "🔪 Prep List",
+              listItems
+            ),
+          }).catch(() => {}),
+      },
+      { text: "Uncheck All", onPress: () => batchUpdate(listItems.filter((i) => i.checked), "uncheck") },
+      { text: "Clear Checked", onPress: () => batchUpdate(listItems.filter((i) => i.checked), "delete") },
+      {
+        text: "Clear Entire List",
+        style: "destructive",
+        onPress: () =>
+          Alert.alert("Clear list?", `Remove all ${listItems.length} items from your ${listLabel}?`, [
+            { text: "Cancel", style: "cancel" },
+            { text: "Clear", style: "destructive", onPress: () => batchUpdate(listItems, "delete") },
+          ]),
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScreenHeader
           title="Prep & Grocery"
-          subtitle={`${completedCount} of ${items.length} items acquired`}
+          subtitle={
+            listItems.length
+              ? `${completedCount} of ${listItems.length} done`
+              : activeList === "grocery"
+              ? "Your shopping list"
+              : "Your prep tasks"
+          }
         />
 
-        {/* Progress Tracker */}
-        {items.length > 0 && (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBarBackground}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  { width: `${progressPercent}%` },
-                ]}
-              />
-            </View>
-            {completedCount > 0 && (
-              <Pressable onPress={clearCompleted} style={styles.clearBtn}>
-                <Text style={styles.clearBtnText}>Clear checked</Text>
-              </Pressable>
-            )}
+        {/* List switcher + menu */}
+        <View style={styles.toolbar}>
+          <View style={styles.segment}>
+            {LISTS.map((l) => {
+              const active = l.value === activeList;
+              const count = items.filter((i) => i.list === l.value && !i.checked).length;
+              return (
+                <Pressable
+                  key={l.value}
+                  style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+                  onPress={() => setActiveList(l.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <FontAwesome name={l.icon} size={12} color={active ? tc("#0f1115") : tc("#a1a1aa")} />
+                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                    {l.label}
+                    {count ? ` · ${count}` : ""}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Pressable
+            style={styles.menuBtn}
+            onPress={showMenu}
+            disabled={listItems.length === 0}
+            accessibilityLabel="List options"
+          >
+            <Ionicons
+              name="ellipsis-horizontal"
+              size={18}
+              color={listItems.length ? tc("#f4f4f5") : tc("#52525b")}
+            />
+          </Pressable>
+        </View>
+
+        {listItems.length > 0 && (
+          <View style={styles.progressBarBackground}>
+            <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
           </View>
         )}
 
-        {/* Input Bar */}
+        {/* Add bar */}
         <View style={styles.inputContainer}>
           <TextInput
-            style={styles.input}
-            placeholder="Add ingredient or prep item..."
+            style={[styles.input, styles.qtyInput]}
+            placeholder="Qty"
             placeholderTextColor="#71717a"
-            value={newItemText}
-            onChangeText={setNewItemText}
+            value={newQty}
+            onChangeText={setNewQty}
+            maxLength={40}
+            returnKeyType="next"
+          />
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder={activeList === "grocery" ? "Add an item…" : "Add a prep task…"}
+            placeholderTextColor="#71717a"
+            value={newName}
+            onChangeText={setNewName}
             onSubmitEditing={addItem}
             returnKeyType="done"
+            maxLength={200}
           />
           <Pressable
             onPress={addItem}
             style={({ pressed }) => [
               styles.addBtn,
-              !newItemText.trim() && styles.addBtnDisabled,
+              !newName.trim() && styles.addBtnDisabled,
               pressed && styles.pressed,
             ]}
-            disabled={!newItemText.trim()}
+            disabled={!newName.trim()}
+            accessibilityLabel="Add item"
           >
-            <FontAwesome name="plus" size={14} color="#0f1115" />
+            <FontAwesome name="plus" size={14} color={tc("#0f1115")} />
           </Pressable>
         </View>
 
-        {/* Grocery Items List */}
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#f59e0b" />
-            <Text style={styles.loadingText}>Syncing grocery list...</Text>
           </View>
         ) : (
-          <FlatList
-            data={items}
+          <SectionList
+            sections={sections}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            stickySectionHeadersEnabled={false}
+            keyboardShouldPersistTaps="handled"
+            renderSectionHeader={({ section }) => (
+              <Text style={styles.sectionHeader}>
+                {section.title} · {section.data.filter((i) => !i.checked).length}
+              </Text>
+            )}
             renderItem={({ item }) => (
-              <View
-                style={[
-                  styles.card,
-                  item.checked && styles.cardChecked,
-                ]}
-              >
+              <View style={[styles.card, item.checked && styles.cardChecked]}>
                 <Pressable
-                  onPress={() => toggleCheck(item.id, item.checked)}
+                  onPress={() => toggleCheck(item)}
                   style={styles.checkboxTouch}
+                  hitSlop={8}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: item.checked }}
                 >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      item.checked && styles.checkboxActive,
-                    ]}
-                  >
-                    {item.checked && (
-                      <FontAwesome name="check" size={10} color="#0f1115" />
-                    )}
+                  <View style={[styles.checkbox, item.checked && styles.checkboxActive]}>
+                    {item.checked && <FontAwesome name="check" size={10} color={tc("#0f1115")} />}
                   </View>
+                </Pressable>
+                <Pressable style={styles.itemBody} onPress={() => openEdit(item)}>
                   <Text
-                    style={[
-                      styles.itemText,
-                      item.checked && styles.strikethrough,
-                    ]}
+                    style={[styles.itemText, item.checked && styles.strikethrough]}
+                    numberOfLines={2}
                   >
+                    {item.quantity ? <Text style={styles.qtyText}>{item.quantity} </Text> : null}
                     {item.name}
                   </Text>
+                  {activeList === "grocery" && item.recipeTitle ? (
+                    <Text style={styles.sourceText} numberOfLines={1}>
+                      for {item.recipeTitle}
+                    </Text>
+                  ) : null}
                 </Pressable>
-
                 <Pressable
                   onPress={() => deleteItem(item.id)}
-                  style={({ pressed }) => [
-                    styles.deleteBtn,
-                    pressed && styles.pressed,
-                  ]}
+                  style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}
                   hitSlop={12}
+                  accessibilityLabel={`Delete ${item.name}`}
                 >
-                  <Ionicons name="trash-outline" size={18} color="#52525b" />
+                  <Ionicons name="trash-outline" size={18} color={tc("#52525b")} />
                 </Pressable>
               </View>
             )}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <View style={styles.emptyIconBg}>
-                  <FontAwesome name="shopping-basket" size={24} color="#f59e0b" />
+                  <FontAwesome
+                    name={activeList === "grocery" ? "shopping-basket" : "list-ul"}
+                    size={24}
+                    color="#f59e0b"
+                  />
                 </View>
-                <Text style={styles.emptyTitle}>List is Empty</Text>
+                <Text style={styles.emptyTitle}>
+                  {activeList === "grocery" ? "Nothing to buy yet" : "No prep tasks yet"}
+                </Text>
                 <Text style={styles.emptySubtitle}>
-                  Add ingredients above to start preparing for your next dish!
+                  {activeList === "grocery"
+                    ? "Add items above, or open any recipe and tap “Add to Grocery List”."
+                    : "Add tasks like “Dice 2 onions” or “Marinate chicken overnight”."}
                 </Text>
               </View>
             }
           />
         )}
       </KeyboardAvoidingView>
+
+      {/* Edit item */}
+      <Modal visible={!!editing} transparent animationType="fade" onRequestClose={() => setEditing(null)}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit item</Text>
+            <Text style={styles.modalLabel}>Item</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editName}
+              onChangeText={setEditName}
+              maxLength={200}
+              placeholderTextColor="#71717a"
+            />
+            <Text style={styles.modalLabel}>Quantity</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editQty}
+              onChangeText={setEditQty}
+              placeholder="e.g. 2 lbs"
+              placeholderTextColor="#71717a"
+              maxLength={40}
+            />
+            <Pressable style={styles.moveBtn} onPress={moveEditing}>
+              <FontAwesome name="exchange" size={12} color="#f59e0b" />
+              <Text style={styles.moveText}>
+                Move to {editing?.list === "grocery" ? "Prep" : "Grocery"} list
+              </Text>
+            </Pressable>
+            <View style={styles.modalActions}>
+              <Pressable style={styles.modalSecondary} onPress={() => setEditing(null)}>
+                <Text style={styles.modalSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalPrimary, !editName.trim() && styles.addBtnDisabled]}
+                onPress={saveEdit}
+                disabled={!editName.trim()}
+              >
+                <Text style={styles.modalPrimaryText}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#0f1115",
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#0f1115",
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 13,
-    color: "#a1a1aa",
-    fontWeight: "600",
-  },
+const styles = themedStyles({
+  safeArea: { flex: 1, backgroundColor: "#0f1115" },
+  container: { flex: 1, backgroundColor: "#0f1115" },
+  pressed: { opacity: 0.7 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  // Header
-  header: {
+  toolbar: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    gap: 10,
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
+    marginBottom: 12,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#f4f4f5",
-    letterSpacing: -0.5,
+  segment: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "#181b20",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#27272a",
+    padding: 3,
+    gap: 3,
   },
-  brandDot: {
-    color: "#f59e0b",
+  segmentBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 9,
   },
-  subtitle: {
-    fontSize: 13,
-    color: "#a1a1aa",
-    fontWeight: "500",
-    marginTop: 2,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  segmentBtnActive: { backgroundColor: "#f59e0b" },
+  segmentText: { color: "#a1a1aa", fontWeight: "700", fontSize: 13 },
+  segmentTextActive: { color: "#0f1115" },
+  menuBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     backgroundColor: "#181b20",
     borderWidth: 1,
     borderColor: "#27272a",
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
   },
 
-  // Progress Bar
-  progressContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
   progressBarBackground: {
-    flex: 1,
     height: 6,
-    backgroundColor: "#181b20",
+    backgroundColor: "#27272a",
     borderRadius: 3,
+    marginHorizontal: 20,
+    marginBottom: 12,
     overflow: "hidden",
-    borderWidth: 0.5,
-    borderColor: "#27272a",
   },
-  progressBarFill: {
-    height: "100%",
-    backgroundColor: "#f59e0b",
-    borderRadius: 3,
-  },
-  clearBtn: {
-    paddingVertical: 2,
-  },
-  clearBtnText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#f59e0b",
-  },
+  progressBarFill: { height: "100%", backgroundColor: "#f59e0b", borderRadius: 3 },
 
-  // Input
   inputContainer: {
     flexDirection: "row",
-    alignItems: "center",
     paddingHorizontal: 20,
-    marginBottom: 16,
-    gap: 10,
+    gap: 8,
+    marginBottom: 8,
   },
   input: {
-    flex: 1,
-    height: 48,
     backgroundColor: "#181b20",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: "#f4f4f5",
     borderWidth: 1,
     borderColor: "#27272a",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 46,
+    color: "#f4f4f5",
+    fontSize: 15,
   },
+  qtyInput: { width: 70, paddingHorizontal: 10, textAlign: "center" },
   addBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 46,
+    height: 46,
+    borderRadius: 12,
     backgroundColor: "#f59e0b",
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
-  addBtnDisabled: {
-    backgroundColor: "#3f3f46",
-  },
+  addBtnDisabled: { opacity: 0.4 },
 
-  // List Items
-  listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    gap: 10,
+  listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  sectionHeader: {
+    color: "#a1a1aa",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginTop: 16,
+    marginBottom: 8,
   },
   card: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     backgroundColor: "#181b20",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "#27272a",
-  },
-  cardChecked: {
-    backgroundColor: "#121418",
-    borderColor: "#27272a",
-    opacity: 0.7,
-  },
-  checkboxTouch: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
     gap: 12,
   },
+  cardChecked: { opacity: 0.55 },
+  checkboxTouch: { padding: 2 },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 7,
     borderWidth: 2,
     borderColor: "#52525b",
-    justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "transparent",
+    justifyContent: "center",
   },
-  checkboxActive: {
-    backgroundColor: "#f59e0b",
-    borderColor: "#f59e0b",
-  },
-  itemText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#f4f4f5",
-    flex: 1,
-  },
-  strikethrough: {
-    textDecorationLine: "line-through",
-    color: "#71717a",
-  },
-  deleteBtn: {
-    padding: 6,
-    marginLeft: 8,
-  },
+  checkboxActive: { backgroundColor: "#f59e0b", borderColor: "#f59e0b" },
+  itemBody: { flex: 1 },
+  itemText: { color: "#f4f4f5", fontSize: 15, fontWeight: "500" },
+  qtyText: { color: "#f59e0b", fontWeight: "800" },
+  sourceText: { color: "#71717a", fontSize: 12, marginTop: 2 },
+  strikethrough: { textDecorationLine: "line-through", color: "#71717a" },
+  deleteBtn: { padding: 4 },
 
-  // Empty State
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-  },
+  emptyContainer: { alignItems: "center", marginTop: 60, paddingHorizontal: 30 },
   emptyIconBg: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: "#181b20",
     borderWidth: 1,
     borderColor: "#27272a",
-    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12,
+    justifyContent: "center",
+    marginBottom: 14,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f4f4f5",
-  },
+  emptyTitle: { color: "#f4f4f5", fontSize: 17, fontWeight: "800" },
   emptySubtitle: {
-    fontSize: 13,
-    color: "#71717a",
+    color: "#a1a1aa",
+    fontSize: 14,
     textAlign: "center",
     marginTop: 6,
-    maxWidth: 240,
-    lineHeight: 18,
+    lineHeight: 20,
   },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: "#181b20",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#27272a",
+    padding: 20,
+  },
+  modalTitle: { color: "#f4f4f5", fontSize: 18, fontWeight: "800", marginBottom: 12 },
+  modalLabel: { color: "#a1a1aa", fontSize: 12, fontWeight: "700", marginBottom: 6, marginTop: 6 },
+  modalInput: {
+    backgroundColor: "#0f1115",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 46,
+    color: "#f4f4f5",
+    fontSize: 15,
+  },
+  moveBtn: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16 },
+  moveText: { color: "#f59e0b", fontWeight: "700", fontSize: 14 },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 20 },
+  modalSecondary: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#27272a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalSecondaryText: { color: "#f4f4f5", fontWeight: "700" },
+  modalPrimary: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: "#f59e0b",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalPrimaryText: { color: "#0f1115", fontWeight: "800" },
 });

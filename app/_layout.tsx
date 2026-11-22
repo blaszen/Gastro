@@ -9,7 +9,7 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
-import { useColorScheme } from "@/components/useColorScheme";
+import { AppThemeProvider, useThemeMode, tc, themedStyles } from "../lib/theme";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { useUserStore } from "../store/userStore";
@@ -31,11 +31,15 @@ export default function RootLayout() {
 
   if (!loaded) return null;
 
-  return <RootNav fontsLoaded={loaded} />;
+  return (
+    <AppThemeProvider>
+      <RootNav fontsLoaded={loaded} />
+    </AppThemeProvider>
+  );
 }
 
 function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
-  const colorScheme = useColorScheme();
+  const { mode } = useThemeMode();
   const router = useRouter();
   const setUser = useUserStore((s) => s.setUser);
 
@@ -63,7 +67,6 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
     // 2. Firebase Auth Listener
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
-      console.log("AUTH STATE:", u);
 
       // Hide native splash screen once fonts & auth state check complete
       if (fontsLoaded) {
@@ -86,8 +89,8 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   return (
     <GluestackUIProvider>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <View style={{ flex: 1, backgroundColor: "#0f1115" }}>
+      <ThemeProvider value={mode === "dark" ? DarkTheme : DefaultTheme}>
+        <View style={{ flex: 1, backgroundColor: tc(tc("#0f1115")) }}>
           <Stack screenOptions={{ headerShown: false }}>
             {/* Main navigation */}
             <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
@@ -129,7 +132,7 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   splashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#0f1115",

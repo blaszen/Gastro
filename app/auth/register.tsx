@@ -11,38 +11,67 @@ import {
   StatusBar,
   ActivityIndicator,
 } from "react-native";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../lib/firebase";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "../../lib/firebase";
 import { router } from "expo-router";
 
 export default function Register() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-const onRegister = async () => {
-  if (!email || !password) {
-    setError("Please fill in all fields.");
-    return;
-  }
+  const onRegister = async () => {
+    const cleanName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanName || !cleanEmail || !password) {
+      setError("Please fill in all fields.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
 
-  setError("");
-  setLoading(true);
+    setError("");
+    setLoading(true);
 
-  try {
-    await createUserWithEmailAndPassword(auth, email, password);
-    // Redirect to the main app drawer upon registration
-    router.replace("/(drawer)"); 
-  } catch (e: any) {
-    const friendlyError = e.message
-      ? e.message.replace("Firebase: ", "")
-      : "An unexpected error occurred.";
-    setError(friendlyError);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+      await updateProfile(cred.user, { displayName: cleanName.slice(0, 40) });
+      // Create the profile right away so friends can find this chef by email.
+      await setDoc(
+        doc(db, "users", cred.user.uid),
+        {
+          uid: cred.user.uid,
+          email: cleanEmail,
+          displayName: cleanName.slice(0, 40),
+          photoURL: "",
+          createdAt: new Date().toISOString(),
+          notificationsSeenAt: new Date().toISOString(),
+        },
+        { merge: true }
+      ).catch((e) => console.error("Profile creation failed:", e));
+      router.replace("/(drawer)");
+    } catch (e: any) {
+      const code = e?.code || "";
+      setError(
+        code === "auth/email-already-in-use"
+          ? "An account with this email already exists. Try logging in."
+          : code === "auth/invalid-email"
+          ? "That email address doesn't look right."
+          : code === "auth/weak-password"
+          ? "Please choose a stronger password (at least 6 characters)."
+          : code === "auth/network-request-failed"
+          ? "No connection. Check your internet and try again."
+          : "Couldn't create your account. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -64,6 +93,18 @@ const onRegister = async () => {
 
           {/* Form Inputs */}
           <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Name</Text>
+            <TextInput
+              placeholder="Your name"
+              placeholderTextColor="#71717a"
+              style={styles.input}
+              onChangeText={setName}
+              value={name}
+              autoCapitalize="words"
+              maxLength={40}
+              textContentType="name"
+            />
+
             <Text style={styles.inputLabel}>Email Address</Text>
             <TextInput
               placeholder="chef@kitchen.com"
@@ -77,9 +118,10 @@ const onRegister = async () => {
 
             <Text style={styles.inputLabel}>Password</Text>
             <TextInput
-              placeholder="••••••••"
+              placeholder="At least 6 characters"
               placeholderTextColor="#71717a"
               secureTextEntry
+              textContentType="newPassword"
               style={styles.input}
               onChangeText={setPassword}
               value={password}
@@ -88,6 +130,24 @@ const onRegister = async () => {
 
           {/* Error Message */}
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <Text style={styles.legalText}>
+            By signing up you agree to our{" "}
+            <Text
+              style={styles.legalLink}
+              onPress={() => router.push({ pathname: "/legal", params: { doc: "terms" } } as any)}
+            >
+              Terms of Service
+            </Text>{" "}
+            and{" "}
+            <Text
+              style={styles.legalLink}
+              onPress={() => router.push({ pathname: "/legal", params: { doc: "privacy" } } as any)}
+            >
+              Privacy Policy
+            </Text>
+            .
+          </Text>
 
           {/* Action Buttons */}
           <TouchableOpacity
@@ -119,6 +179,8 @@ const onRegister = async () => {
 }
 
 const styles = StyleSheet.create({
+  legalText: { color: "#71717a", fontSize: 12, lineHeight: 18, marginBottom: 16, textAlign: "center" },
+  legalLink: { color: "#f59e0b", fontWeight: "600" },
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",

@@ -23,6 +23,7 @@ import {
 } from "firebase/firestore";
 import { useRouter } from "expo-router";
 import { db } from "../lib/firebase"; // Adjust relative path if needed
+import { themedStyles, tc, useThemeMode } from "../lib/theme";
 
 interface Friend {
   uid: string;
@@ -76,6 +77,7 @@ export default function ShareRecipeModal({
   onClose,
   recipe,
 }: ShareRecipeModalProps) {
+  useThemeMode();
   const router = useRouter();
   const auth = getAuth();
   const currentUser = auth.currentUser;
@@ -211,7 +213,7 @@ const handleOpenChat = (friendUid: string) => {
               </Text>
             </View>
             <Pressable onPress={onClose} style={styles.closeBtn}>
-              <FontAwesome name="times" size={16} color="#a1a1aa" />
+              <FontAwesome name="times" size={16} color={tc("#a1a1aa")} />
             </Pressable>
           </View>
 
@@ -239,7 +241,7 @@ return (
     <Pressable
       style={({ pressed }) => [
         styles.friendCard,
-        pressed && { opacity: 0.8, backgroundColor: "#1f242d" },
+        pressed && { opacity: 0.8, backgroundColor: tc("#1f242d") },
       ]}
       onPress={() => {
         if (isSent) {
@@ -272,13 +274,13 @@ return (
       ) : (
         <View style={styles.sendBtn}>
           {isSending ? (
-            <ActivityIndicator size="small" color="#0f1115" />
+            <ActivityIndicator size="small" color={tc("#0f1115")} />
           ) : (
             <>
               <FontAwesome
                 name="paper-plane"
                 size={12}
-                color="#0f1115"
+                color={tc("#0f1115")}
               />
               <Text style={styles.sendBtnText}>Send</Text>
             </>
@@ -296,7 +298,7 @@ return (
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.75)",

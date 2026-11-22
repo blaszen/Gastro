@@ -15,37 +15,69 @@ import {
   StatusBar,
   Switch,
 } from "react-native";
-import { addDoc, updateDoc, doc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, updateDoc, doc, getDoc, collection, serverTimestamp } from "firebase/firestore";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { db, auth } from "../../../lib/firebase";
 import { MaterialCommunityIcons, FontAwesome } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { uploadImageAsync } from "../../../lib/uploadImage";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../lib/theme";
 
-export default function TabThreeScreen({ route, navigation }: any) {
-  const existingRecipe = route?.params?.recipe || null;
-  const isEditing = Boolean(existingRecipe);
+export default function TabThreeScreen() {
+  useThemeMode();
+  const router = useRouter();
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const isEditing = typeof editId === "string" && editId.length > 0;
 
   const [title, setTitle] = useState("");
   const [ingredients, setIngredients] = useState("");
   const [instructions, setInstructions] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [prepTime, setPrepTime] = useState("");
+  const [servings, setServings] = useState("");
   // New recipes are public (shown in the Community Feed) unless marked private.
   const [isPublic, setIsPublic] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [loadingRecipe, setLoadingRecipe] = useState(false);
 
+  // Load the recipe being edited
   useEffect(() => {
-    if (existingRecipe) {
-      setTitle(existingRecipe.title || "");
-      setIngredients(
-        Array.isArray(existingRecipe.ingredients)
-          ? existingRecipe.ingredients.join("\n")
-          : existingRecipe.ingredients || ""
-      );
-      setInstructions(existingRecipe.instructions || "");
-      setImageUrl(existingRecipe.imageUrl || "");
-      setIsPublic(existingRecipe.isPublic ?? true);
-    }
-  }, [existingRecipe]);
+    if (!isEditing) return;
+    let cancelled = false;
+    setLoadingRecipe(true);
+    getDoc(doc(db, "recipes", editId!))
+      .then((snap) => {
+        if (cancelled) return;
+        const r: any = snap.data();
+        if (!snap.exists() || r?.userId !== auth.currentUser?.uid) {
+          Alert.alert("Can't edit", "This recipe doesn't exist or isn't yours.");
+          router.setParams({ editId: "" });
+          return;
+        }
+        setTitle(r.title || "");
+        setIngredients(
+          Array.isArray(r.ingredients) ? r.ingredients.join("\n") : r.ingredients || ""
+        );
+        setInstructions(r.instructions || "");
+        setImageUrl(r.imageUrl || "");
+        setPrepTime(r.prepTimeMinutes ? String(r.prepTimeMinutes) : "");
+        setServings(r.servings ? String(r.servings) : "");
+        setIsPublic(r.isPublic ?? true);
+      })
+      .catch((err) => {
+        console.error("Failed to load recipe for editing:", err);
+        Alert.alert("Error", "Couldn't load this recipe.");
+      })
+      .finally(() => !cancelled && setLoadingRecipe(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [editId]);
+
+  const exitEditing = () => {
+    resetForm();
+    router.setParams({ editId: "" });
+  };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -81,6 +113,17 @@ export default function TabThreeScreen({ route, navigation }: any) {
       Alert.alert("Missing Details", "Please fill in all required fields.");
       return;
     }
+    if (title.trim().length > 200) {
+      Alert.alert("Title too long", "Please keep the title under 200 characters.");
+      return;
+    }
+    const prepMinutes = prepTime.trim() ? parseInt(prepTime, 10) : null;
+    const servingCount = servings.trim() ? parseInt(servings, 10) : null;
+    if ((prepMinutes !== null && (isNaN(prepMinutes) || prepMinutes <= 0 || prepMinutes > 10000)) ||
+        (servingCount !== null && (isNaN(servingCount) || servingCount <= 0 || servingCount > 500))) {
+      Alert.alert("Check the numbers", "Prep time and servings should be whole numbers.");
+      return;
+    }
 
     setLoading(true);
 
@@ -113,6 +156,8 @@ export default function TabThreeScreen({ route, navigation }: any) {
         .filter(Boolean),
       instructions: instructions.trim(),
       imageUrl: finalImageUrl,
+      prepTimeMinutes: prepMinutes,
+      servings: servingCount,
       isPublic: Boolean(isPublic),
       userId: user.uid,
       createdBy: user.displayName || user.email?.split("@")[0] || "Chef",
@@ -121,23 +166,27 @@ export default function TabThreeScreen({ route, navigation }: any) {
 
     try {
       if (isEditing) {
-        const recipeRef = doc(db, "recipes", existingRecipe.id);
-        await updateDoc(recipeRef, recipeData);
-        Alert.alert("Updated! ✨", "Your recipe settings have been saved.");
-        if (navigation?.canGoBack()) navigation.goBack();
+        await updateDoc(doc(db, "recipes", editId!), recipeData);
+        const id = editId!;
+        exitEditing();
+        Alert.alert("Recipe updated", "Your changes have been saved.");
+        router.push(`/recipe/${id}` as any);
       } else {
-        await addDoc(collection(db, "recipes"), {
+        const ref = await addDoc(collection(db, "recipes"), {
           ...recipeData,
           createdAt: serverTimestamp(),
         });
-
-        Alert.alert(
-          "Success! 🎉",
-          isPublic
-            ? "Your recipe is published to the public feed!"
-            : "Your recipe was saved privately to your account."
-        );
         resetForm();
+        Alert.alert(
+          "Recipe saved",
+          isPublic
+            ? "Your recipe is live in the Community Feed."
+            : "Your recipe was saved privately to your account.",
+          [
+            { text: "Done", style: "cancel" },
+            { text: "View Recipe", onPress: () => router.push(`/recipe/${ref.id}` as any) },
+          ]
+        );
       }
     } catch (err) {
       console.error(err);
@@ -152,12 +201,14 @@ export default function TabThreeScreen({ route, navigation }: any) {
     setIngredients("");
     setInstructions("");
     setImageUrl("");
+    setPrepTime("");
+    setServings("");
     setIsPublic(true);
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -176,10 +227,20 @@ export default function TabThreeScreen({ route, navigation }: any) {
               </Text>
               <Text style={styles.headerSubtitle}>
                 {isEditing
-                  ? "Manage visibility and details for your dish"
+                  ? "Update the details, photo or visibility of your dish"
                   : "Craft and share your culinary creation"}
               </Text>
+              {isEditing ? (
+                <Pressable onPress={exitEditing} style={styles.cancelEdit} hitSlop={8}>
+                  <FontAwesome name="times" size={12} color={tc("#a1a1aa")} />
+                  <Text style={styles.cancelEditText}>Cancel editing</Text>
+                </Pressable>
+              ) : null}
             </View>
+
+            {loadingRecipe ? (
+              <ActivityIndicator color="#f59e0b" style={{ marginVertical: 24 }} />
+            ) : null}
 
             {/* Cover Image Picker */}
             <Pressable style={styles.imageCard} onPress={pickImage}>
@@ -190,9 +251,17 @@ export default function TabThreeScreen({ route, navigation }: any) {
                     style={styles.previewImage}
                   />
                   <View style={styles.changeBadge}>
-                    <FontAwesome name="pencil" size={12} color="#0f1115" />
+                    <FontAwesome name="pencil" size={12} color={tc("#0f1115")} />
                     <Text style={styles.changeBadgeText}>Change</Text>
                   </View>
+                  <Pressable
+                    style={styles.removeBadge}
+                    onPress={() => setImageUrl("")}
+                    hitSlop={8}
+                    accessibilityLabel="Remove photo"
+                  >
+                    <FontAwesome name="trash" size={12} color={tc("#f4f4f5")} />
+                  </Pressable>
                 </View>
               ) : (
                 <View style={styles.imagePlaceholder}>
@@ -211,7 +280,7 @@ export default function TabThreeScreen({ route, navigation }: any) {
                   <MaterialCommunityIcons
                     name={isPublic ? "earth" : "lock-outline"}
                     size={18}
-                    color={isPublic ? "#f59e0b" : "#a1a1aa"}
+                    color={isPublic ? "#f59e0b" : tc("#a1a1aa")}
                   />
                   <Text style={styles.visibilityTitle}>
                     {isPublic ? "Public Recipe" : "Private Recipe"}
@@ -225,9 +294,9 @@ export default function TabThreeScreen({ route, navigation }: any) {
               </View>
               <Switch
                 accessibilityLabel="Private recipe"
-                trackColor={{ false: "#27272a", true: "#f59e0b" }}
-                thumbColor={isPublic ? "#71717a" : "#0f1115"}
-                ios_backgroundColor="#27272a"
+                trackColor={{ false: tc("#27272a"), true: "#f59e0b" }}
+                thumbColor={isPublic ? "#71717a" : tc("#0f1115")}
+                ios_backgroundColor={tc("#27272a")}
                 onValueChange={(makePrivate) => setIsPublic(!makePrivate)}
                 value={!isPublic}
               />
@@ -245,7 +314,35 @@ export default function TabThreeScreen({ route, navigation }: any) {
                   placeholderTextColor="#71717a"
                   value={title}
                   onChangeText={setTitle}
+                  maxLength={200}
                 />
+              </View>
+
+              <View style={styles.rowInputs}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Prep time (min)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="30"
+                    placeholderTextColor="#71717a"
+                    value={prepTime}
+                    onChangeText={(t) => setPrepTime(t.replace(/[^0-9]/g, ""))}
+                    keyboardType="number-pad"
+                    maxLength={5}
+                  />
+                </View>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Servings</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="4"
+                    placeholderTextColor="#71717a"
+                    value={servings}
+                    onChangeText={(t) => setServings(t.replace(/[^0-9]/g, ""))}
+                    keyboardType="number-pad"
+                    maxLength={3}
+                  />
+                </View>
               </View>
 
               <View style={styles.inputGroup}>
@@ -290,19 +387,19 @@ export default function TabThreeScreen({ route, navigation }: any) {
                 pressed && styles.submitButtonPressed,
               ]}
               onPress={handleSubmit}
-              disabled={loading}
+              disabled={loading || loadingRecipe}
             >
               {loading ? (
-                <ActivityIndicator color="#0f1115" />
+                <ActivityIndicator color={tc("#0f1115")} />
               ) : (
                 <View style={styles.buttonContent}>
                   <MaterialCommunityIcons
                     name="content-save-check"
                     size={20}
-                    color="#0f1115"
+                    color={tc("#0f1115")}
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={styles.submitButtonText}>Submit</Text>
+                  <Text style={styles.submitButtonText}>{isEditing ? "Save Changes" : isPublic ? "Publish Recipe" : "Save Recipe"}</Text>
                 </View>
               )}
             </Pressable>
@@ -313,7 +410,32 @@ export default function TabThreeScreen({ route, navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
+  cancelEdit: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#27272a",
+  },
+  cancelEditText: { color: "#a1a1aa", fontSize: 12, fontWeight: "700" },
+  removeBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(15, 17, 21, 0.85)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowInputs: { flexDirection: "row", gap: 12 },
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",
