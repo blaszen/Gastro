@@ -18,17 +18,18 @@ import {
   Modal,
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { signOut } from "firebase/auth";
-import { auth } from "../../../lib/firebase";
+import { auth, db } from "../../../lib/firebase";
+import { collection, limit, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import RecipeImage from "../../../components/RecipeImage";
+import { useNotificationBadge } from "../../../lib/notifications";
+import { useBlockedIds } from "../../../lib/moderation";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
 import { searchRecipes, getRecipeInformation } from "../../../lib/spoonacular";
-import { useAudioPlayer } from "expo-audio";
 import { router } from "expo-router";
 import { fetchUserFavorites, toggleFavoriteRecipe } from "../../../lib/favorites";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../lib/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const ALARM_SOUND_URI =
-  "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
 
 // --- Data Types ---
 interface ExtendedIngredient {
@@ -76,40 +77,6 @@ interface Service {
   icon: keyof typeof FontAwesome.glyphMap;
   url: string;
 }
-
-type ConversionCategory = "weight" | "volume" | "temp" | "length";
-
-interface ConversionOption {
-  label: string;
-  convert: (val: number) => string;
-  unitLabel: string;
-}
-
-// Map conversion types by category
-const CONVERSION_OPTIONS: Record<ConversionCategory, ConversionOption[]> = {
-  weight: [
-    { label: "Ounces (oz) → Grams (g)", convert: (v) => `${(v * 28.3495).toFixed(1)} g`, unitLabel: "oz" },
-    { label: "Grams (g) → Ounces (oz)", convert: (v) => `${(v / 28.3495).toFixed(2)} oz`, unitLabel: "g" },
-    { label: "Pounds (lbs) → Kilograms (kg)", convert: (v) => `${(v * 0.453592).toFixed(2)} kg`, unitLabel: "lbs" },
-    { label: "Kilograms (kg) → Pounds (lbs)", convert: (v) => `${(v / 0.453592).toFixed(2)} lbs`, unitLabel: "kg" },
-  ],
-  volume: [
-    { label: "Tablespoons (tbsp) → Cups", convert: (v) => `${(v / 16).toFixed(2)} cups`, unitLabel: "tbsp" },
-    { label: "Cups → Tablespoons (tbsp)", convert: (v) => `${(v * 16).toFixed(1)} tbsp`, unitLabel: "cups" },
-    { label: "Fluid Oz (fl oz) → Milliliters (ml)", convert: (v) => `${(v * 29.5735).toFixed(1)} ml`, unitLabel: "fl oz" },
-    { label: "Milliliters (ml) → Fluid Oz (fl oz)", convert: (v) => `${(v / 29.5735).toFixed(2)} fl oz`, unitLabel: "ml" },
-    { label: "Liters (L) → Gallons (gal)", convert: (v) => `${(v * 0.264172).toFixed(2)} gal`, unitLabel: "L" },
-    { label: "Gallons (gal) → Liters (L)", convert: (v) => `${(v / 0.264172).toFixed(2)} L`, unitLabel: "gal" },
-  ],
-  temp: [
-    { label: "Fahrenheit (°F) → Celsius (°C)", convert: (v) => `${(((v - 32) * 5) / 9).toFixed(1)} °C`, unitLabel: "°F" },
-    { label: "Celsius (°C) → Fahrenheit (°F)", convert: (v) => `${((v * 9) / 5 + 32).toFixed(1)} °F`, unitLabel: "°C" },
-  ],
-  length: [
-    { label: "Inches (in) → Centimeters (cm)", convert: (v) => `${(v * 2.54).toFixed(2)} cm`, unitLabel: "in" },
-    { label: "Centimeters (cm) → Inches (in)", convert: (v) => `${(v / 2.54).toFixed(2)} in`, unitLabel: "cm" },
-  ],
-};
 
 const cookingVideos: Video[] = [
   {
@@ -169,6 +136,7 @@ const services: Service[] = [
 ];
 
 export default function TabOneScreen() {
+  useThemeMode();
   // FAVORITES STATE
   const [favorites, setFavorites] = useState<string[]>([]);
 
@@ -243,57 +211,34 @@ export default function TabOneScreen() {
   const [totalResults, setTotalResults] = useState(0);
   const [offset, setOffset] = useState(0);
 
-  // Modal States
-  const [converterVisible, setConverterVisible] = useState(false);
-  const [eightySixVisible, setEightySixVisible] = useState(false);
-  const [timerVisible, setTimerVisible] = useState(false);
+  // Latest community recipes for the home feed
+  const [communityRecipes, setCommunityRecipes] = useState<any[]>([]);
+  const notificationCount = useNotificationBadge(auth.currentUser?.uid);
+  const blockedIds = useBlockedIds(auth.currentUser?.uid);
 
-  // Kitchen Timer State
-  const [secondsLeft, setSecondsLeft] = useState(300); // 5 mins default
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const player = useAudioPlayer(ALARM_SOUND_URI);
-
-  // Quick Converter Local State
-  const [selectedCategory, setSelectedCategory] = useState<ConversionCategory>("weight");
-  const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
-  const [convertAmount, setConvertAmount] = useState("1");
-
-  // 86 List State
-  const [eightySixItems, setEightySixItems] = useState([
-    "Flatiron Steak",
-    "Wild Mushroom Risotto",
-  ]);
-  const [newItem, setNewItem] = useState("");
+  useEffect(() => {
+    const q = query(
+      collection(db, "recipes"),
+      where("isPublic", "==", true),
+      orderBy("createdAt", "desc"),
+      limit(10)
+    );
+    return onSnapshot(
+      q,
+      (snap) => setCommunityRecipes(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))),
+      (err) => console.error("Community feed error:", err)
+    );
+  }, []);
 
   // Scroll Ref
   const scrollRef = useRef<ScrollView>(null);
   const [lastScrollIndex, setLastScrollIndex] = useState(0);
 
-  const userEmail = auth.currentUser?.email || "";
-
-  // Timer Countdown Effect
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    if (isTimerRunning && secondsLeft > 0) {
-      interval = setInterval(() => {
-        setSecondsLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (secondsLeft === 0 && isTimerRunning) {
-      setIsTimerRunning(false);
-      try {
-        player.seekTo(0);
-        player.play();
-      } catch (err) {
-        console.log("Audio alert playback error:", err);
-      }
-      Alert.alert("Timer Complete!", "Your kitchen timer has finished.");
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isTimerRunning, secondsLeft, player]);
+  const currentUser = auth.currentUser;
+  const greetingName =
+    currentUser?.displayName || currentUser?.email?.split("@")[0] || "Chef";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   const handleOpenLink = async (url?: string) => {
     if (!url) {
@@ -305,16 +250,6 @@ export default function TabOneScreen() {
     } catch (error) {
       console.error("Failed opening link:", error);
       Alert.alert("Error", "Could not open link.");
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      router.replace("/auth/login");
-    } catch (err) {
-      console.error("Logout error:", err);
-      Alert.alert("Logout Error", "Unable to sign out properly.");
     }
   };
 
@@ -358,32 +293,6 @@ export default function TabOneScreen() {
 
   const CARD_WIDTH = SCREEN_WIDTH * 0.62;
   const SERVICE_CARD_WIDTH = SCREEN_WIDTH * 0.82;
-
-  const currentOptions = CONVERSION_OPTIONS[selectedCategory];
-  const currentOption = currentOptions[selectedOptionIndex] || currentOptions[0];
-
-  const getConvertedValue = () => {
-    const val = parseFloat(convertAmount);
-    if (isNaN(val)) return "---";
-    return currentOption.convert(val);
-  };
-
-  const formatTimer = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
-  };
-
-  const handleAdd86Item = () => {
-    if (newItem.trim().length > 0) {
-      setEightySixItems([...eightySixItems, newItem.trim()]);
-      setNewItem("");
-    }
-  };
-
-  const handleRemove86Item = (index: number) => {
-    setEightySixItems(eightySixItems.filter((_, i) => i !== index));
-  };
 
   const renderRecipeCard = (item: Recipe) => {
     const isFav = favorites.includes(String(item.id));
@@ -469,7 +378,7 @@ export default function TabOneScreen() {
           <FontAwesome
             name="play"
             size={12}
-            color="#0f1115"
+            color={tc("#0f1115")}
             style={{ marginLeft: 2 }}
           />
         </View>
@@ -517,7 +426,7 @@ export default function TabOneScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -530,34 +439,46 @@ export default function TabOneScreen() {
             style={styles.leftHeader}
           >
             <View style={styles.avatarBorder}>
-              <Image
-                style={styles.avatar}
-                source={{
-                  uri: "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200",
-                }}
-              />
+              {currentUser?.photoURL?.startsWith("http") ? (
+                <Image style={styles.avatar} source={{ uri: currentUser.photoURL }} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Text style={styles.avatarInitial}>{greetingName.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
             </View>
             <View style={styles.headerTextContainer}>
-              <Text style={styles.greeting}>Welcome</Text>
+              <Text style={styles.greeting}>{greeting}</Text>
               <Text
                 style={styles.username}
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
-                Chef {userEmail}
+                {greetingName}
               </Text>
             </View>
           </Pressable>
 
-          <Pressable style={styles.iconButton} onPress={handleLogout}>
-            <FontAwesome name="sign-out" size={15} color="#ef4444" />
+          <Pressable
+            style={styles.iconButton}
+            onPress={() => router.push("/notifications" as any)}
+            accessibilityLabel="Notifications"
+          >
+            <FontAwesome name="bell-o" size={15} color={tc("#f4f4f5")} />
+            {notificationCount > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </Text>
+              </View>
+            )}
           </Pressable>
         </View>
 
         {/* In-App Recipe Detail Modal */}
         <Modal visible={recipeModalVisible} animationType="slide" transparent={false}>
           <SafeAreaView style={styles.recipeModalContainer}>
-            <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+            <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
             {/* Modal Header Controls */}
             <View style={styles.recipeModalHeader}>
@@ -578,7 +499,7 @@ export default function TabOneScreen() {
                     <FontAwesome
                       name={favorites.includes(String(selectedRecipe.id)) ? "heart" : "heart-o"}
                       size={18}
-                      color={favorites.includes(String(selectedRecipe.id)) ? "#ef4444" : "#a1a1aa"}
+                      color={favorites.includes(String(selectedRecipe.id)) ? "#ef4444" : tc("#a1a1aa")}
                     />
                   </Pressable>
                 )}
@@ -588,7 +509,7 @@ export default function TabOneScreen() {
                     onPress={() => handleOpenLink(selectedRecipe.sourceUrl)}
                     style={styles.externalLinkBtn}
                   >
-                    <FontAwesome name="external-link" size={14} color="#a1a1aa" />
+                    <FontAwesome name="external-link" size={14} color={tc("#a1a1aa")} />
                   </Pressable>
                 )}
               </View>
@@ -693,45 +614,62 @@ export default function TabOneScreen() {
           </SafeAreaView>
         </Modal>
 
-        {/* Quick Utility Tools Grid */}
+        {/* Quick Actions */}
         <View style={styles.utilityGrid}>
-          <TouchableOpacity
-            style={styles.utilityCard}
-            onPress={() => setConverterVisible(true)}
-          >
-            <View style={styles.utilityIconWrapper}>
-              <FontAwesome name="exchange" size={14} color="#f59e0b" />
-            </View>
-            <Text style={styles.utilityTitle}>Unit Converter</Text>
-            <Text style={styles.utilitySub}>Weight, Vol, Temp, Length</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.utilityCard}
-            onPress={() => setEightySixVisible(true)}
-          >
-            <View style={styles.utilityIconWrapper}>
-              <FontAwesome name="ban" size={14} color="#ef4444" />
-            </View>
-            <Text style={styles.utilityTitle}>86 Board</Text>
-            <Text style={styles.utilitySub}>
-              {eightySixItems.length} items out
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.utilityCard}
-            onPress={() => setTimerVisible(true)}
-          >
-            <View style={styles.utilityIconWrapper}>
-              <FontAwesome name="dashboard" size={14} color="#3b82f6" />
-            </View>
-            <Text style={styles.utilityTitle}>Kitchen Timers</Text>
-            <Text style={styles.utilitySub}>
-              {isTimerRunning ? formatTimer(secondsLeft) : "Prep & Service"}
-            </Text>
-          </TouchableOpacity>
+          {([
+            ["pencil", "Create Recipe", "Share a dish", "/(drawer)/(tabs)/three"],
+            ["shopping-basket", "Grocery List", "Prep & shop", "/grocery"],
+            ["globe", "Community", "See what's cooking", "/community"],
+          ] as const).map(([icon, title, sub, href]) => (
+            <TouchableOpacity
+              key={title}
+              style={styles.utilityCard}
+              onPress={() => router.push(href as any)}
+            >
+              <View style={styles.utilityIconWrapper}>
+                <FontAwesome name={icon} size={14} color="#f59e0b" />
+              </View>
+              <Text style={styles.utilityTitle}>{title}</Text>
+              <Text style={styles.utilitySub}>{sub}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
+
+        {/* Fresh from the community */}
+        {communityRecipes.filter((r) => !blockedIds.has(r.userId)).length > 0 && (
+          <View style={{ marginBottom: 24 }}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.titleRow}>
+                <View style={styles.amberAccentBar} />
+                <Text style={styles.sectionTitle}>Fresh from the Community</Text>
+              </View>
+              <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/community" as any)}>
+                <Text style={styles.seeAllText}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.listContainer}
+            >
+              {communityRecipes.filter((r) => !blockedIds.has(r.userId)).map((r) => (
+                <Pressable
+                  key={r.id}
+                  style={styles.communityCard}
+                  onPress={() => router.push(`/recipe/${r.id}` as any)}
+                >
+                  <RecipeImage uri={r.imageUrl} title={r.title} style={styles.communityImage} />
+                  <Text style={styles.communityTitle} numberOfLines={1}>
+                    {r.title || "Untitled"}
+                  </Text>
+                  <Text style={styles.communityAuthor} numberOfLines={1}>
+                    by {r.createdBy || "a chef"}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Search bar */}
         <View style={styles.searchContainer}>
@@ -772,7 +710,7 @@ export default function TabOneScreen() {
 
         {!loading && noResults && (
           <View style={styles.emptyContainer}>
-            <FontAwesome name="search-minus" size={28} color="#3f3f46" />
+            <FontAwesome name="search-minus" size={28} color={tc("#3f3f46")} />
             <Text style={styles.emptyText}>{searchError ? "Search unavailable" : "No creations found"}</Text>
             {searchError ? (
               <Text style={[styles.emptyText, { fontSize: 12, marginTop: 4, textAlign: "center" }]}>{searchError}</Text>
@@ -852,196 +790,30 @@ export default function TabOneScreen() {
         />
       </ScrollView>
 
-      {/* Converter Modal */}
-      <Modal visible={converterVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Multi-Unit Kitchen Converter</Text>
-              <Pressable onPress={() => setConverterVisible(false)}>
-                <FontAwesome name="times" size={18} color="#a1a1aa" />
-              </Pressable>
-            </View>
-
-            {/* Category Selector */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScrollView}>
-              {(["weight", "volume", "temp", "length"] as ConversionCategory[]).map((cat) => (
-                <Pressable
-                  key={cat}
-                  style={[
-                    styles.catChip,
-                    selectedCategory === cat && styles.catChipActive,
-                  ]}
-                  onPress={() => {
-                    setSelectedCategory(cat);
-                    setSelectedOptionIndex(0);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.catChipText,
-                      selectedCategory === cat && styles.catChipTextActive,
-                    ]}
-                  >
-                    {cat.toUpperCase()}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-
-            {/* Sub-Conversion Pair Selector */}
-            <Text style={styles.inputLabel}>Select Conversion Unit:</Text>
-            <ScrollView style={{ maxHeight: 110, marginBottom: 12 }}>
-              {currentOptions.map((opt, idx) => (
-                <Pressable
-                  key={idx}
-                  style={[
-                    styles.optionRow,
-                    selectedOptionIndex === idx && styles.optionRowActive,
-                  ]}
-                  onPress={() => setSelectedOptionIndex(idx)}
-                >
-                  <Text
-                    style={[
-                      styles.optionRowText,
-                      selectedOptionIndex === idx && styles.optionRowTextActive,
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                  {selectedOptionIndex === idx && (
-                    <FontAwesome name="check" size={12} color="#f59e0b" />
-                  )}
-                </Pressable>
-              ))}
-            </ScrollView>
-
-            {/* Amount Input */}
-            <Text style={styles.inputLabel}>
-              Enter Value ({currentOption.unitLabel}):
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              keyboardType="decimal-pad"
-              value={convertAmount}
-              onChangeText={setConvertAmount}
-              placeholderTextColor="#71717a"
-            />
-
-            {/* Result Box */}
-            <View style={styles.resultBox}>
-              <Text style={styles.resultLabel}>Converted Total:</Text>
-              <Text style={styles.resultValue}>{getConvertedValue()}</Text>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 86 List Modal */}
-      <Modal visible={eightySixVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>86 Board (Out of Stock)</Text>
-              <Pressable onPress={() => setEightySixVisible(false)}>
-                <FontAwesome name="times" size={18} color="#a1a1aa" />
-              </Pressable>
-            </View>
-
-            <View style={styles.add86Row}>
-              <TextInput
-                style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                placeholder="Add 86'd item..."
-                placeholderTextColor="#71717a"
-                value={newItem}
-                onChangeText={setNewItem}
-              />
-              <Pressable style={styles.add86Btn} onPress={handleAdd86Item}>
-                <FontAwesome name="plus" size={14} color="#0f1115" />
-              </Pressable>
-            </View>
-
-            <ScrollView style={{ maxHeight: 200, marginTop: 12 }}>
-              {eightySixItems.map((item, index) => (
-                <View key={index} style={styles.eightySixRow}>
-                  <Text style={styles.eightySixText}>{item}</Text>
-                  <Pressable onPress={() => handleRemove86Item(index)}>
-                    <FontAwesome name="trash" size={14} color="#ef4444" />
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Kitchen Timer Modal */}
-      <Modal visible={timerVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Kitchen Timer</Text>
-              <Pressable onPress={() => setTimerVisible(false)}>
-                <FontAwesome name="times" size={18} color="#a1a1aa" />
-              </Pressable>
-            </View>
-
-            <View style={styles.timerDisplayContainer}>
-              <Text style={styles.timerDisplayText}>{formatTimer(secondsLeft)}</Text>
-            </View>
-
-            <View style={styles.timerPresetsRow}>
-              {[1, 3, 5, 10, 15].map((mins) => (
-                <Pressable
-                  key={mins}
-                  style={styles.timerPresetChip}
-                  onPress={() => {
-                    setIsTimerRunning(false);
-                    setSecondsLeft(mins * 60);
-                  }}
-                >
-                  <Text style={styles.timerPresetText}>{mins}m</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View style={styles.timerControlsRow}>
-              <Pressable
-                style={[
-                  styles.timerBtn,
-                  isTimerRunning ? styles.timerBtnStop : styles.timerBtnStart,
-                ]}
-                onPress={() => setIsTimerRunning(!isTimerRunning)}
-              >
-                <FontAwesome
-                  name={isTimerRunning ? "pause" : "play"}
-                  size={14}
-                  color="#0f1115"
-                />
-                <Text style={styles.timerBtnText}>
-                  {isTimerRunning ? "Pause" : "Start"}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={[styles.timerBtn, styles.timerBtnReset]}
-                onPress={() => {
-                  setIsTimerRunning(false);
-                  setSecondsLeft(300);
-                }}
-              >
-                <FontAwesome name="rotate-left" size={14} color="#ffffff" />
-                <Text style={[styles.timerBtnText, { color: "#ffffff" }]}>Reset</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
+  avatarFallback: { backgroundColor: "#27272a", alignItems: "center", justifyContent: "center" },
+  avatarInitial: { color: "#f59e0b", fontSize: 16, fontWeight: "800" },
+  bellBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: "#ef4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bellBadgeText: { color: "#ffffff", fontSize: 10, fontWeight: "800" },
+  communityCard: { width: 160, marginRight: 14 },
+  communityImage: { width: 160, height: 120, borderRadius: 14, marginBottom: 8 },
+  communityTitle: { color: "#f4f4f5", fontSize: 14, fontWeight: "700" },
+  communityAuthor: { color: "#a1a1aa", fontSize: 12, marginTop: 2 },
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",
@@ -1534,156 +1306,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     flex: 1,
-  },
-  // Converter Styles
-  catScrollView: {
-    flexDirection: "row",
-    marginBottom: 12,
-  },
-  catChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#0f1115",
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: "#27272a",
-  },
-  catChipActive: {
-    backgroundColor: "#f59e0b",
-    borderColor: "#f59e0b",
-  },
-  catChipText: {
-    color: "#a1a1aa",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  catChipTextActive: {
-    color: "#0f1115",
-  },
-  optionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-  optionRowActive: {
-    backgroundColor: "#0f1115",
-  },
-  optionRowText: {
-    color: "#a1a1aa",
-    fontSize: 12,
-  },
-  optionRowTextActive: {
-    color: "#f59e0b",
-    fontWeight: "700",
-  },
-  resultBox: {
-    backgroundColor: "#0f1115",
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#27272a",
-    marginTop: 8,
-    alignItems: "center",
-  },
-  resultLabel: {
-    color: "#71717a",
-    fontSize: 11,
-    textTransform: "uppercase",
-  },
-  resultValue: {
-    color: "#f59e0b",
-    fontSize: 18,
-    fontWeight: "800",
-    marginTop: 2,
-  },
-  // 86 Board Styles
-  add86Row: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  add86Btn: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    backgroundColor: "#f59e0b",
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: 8,
-  },
-  eightySixRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: "#0f1115",
-    borderRadius: 8,
-    marginBottom: 6,
-  },
-  eightySixText: {
-    color: "#ffffff",
-    fontSize: 13,
-  },
-  // Timer Styles
-  timerDisplayContainer: {
-    alignItems: "center",
-    marginVertical: 16,
-  },
-  timerDisplayText: {
-    color: "#f59e0b",
-    fontSize: 42,
-    fontWeight: "800",
-    fontVariant: ["tabular-nums"],
-  },
-  timerPresetsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 20,
-  },
-  timerPresetChip: {
-    backgroundColor: "#0f1115",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#27272a",
-  },
-  timerPresetText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  timerControlsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  timerBtn: {
-    flex: 1,
-    flexDirection: "row",
-    height: 44,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    marginHorizontal: 4,
-  },
-  timerBtnStart: {
-    backgroundColor: "#f59e0b",
-  },
-  timerBtnStop: {
-    backgroundColor: "#ef4444",
-  },
-  timerBtnReset: {
-    backgroundColor: "#27272a",
-  },
-  timerBtnText: {
-    color: "#0f1115",
-    fontWeight: "700",
-    fontSize: 13,
-    marginLeft: 6,
   },
 });

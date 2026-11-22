@@ -13,11 +13,16 @@ import {
 import { useRouter } from "expo-router";
 import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { MaterialCommunityIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
-import { db } from "../../lib/firebase";
+import { db, auth } from "../../lib/firebase";
 import { fetchUserFavorites, toggleFavoriteRecipe } from "../../lib/favorites";
 import ScreenHeader from "../../components/ScreenHeader";
+import RecipeImage from "../../components/RecipeImage";
+import { useBlockedIds } from "../../lib/moderation";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
 export default function CommunityFeedModal() {
+  useThemeMode();
+  const blockedIds = useBlockedIds(auth.currentUser?.uid);
   const [recipes, setRecipes] = useState<any[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -151,7 +156,7 @@ export default function CommunityFeedModal() {
 
     return (
       <Pressable
-        onPress={() => router.push(`/(modals)/recipe/${item.id}` as any)}
+        onPress={() => router.push(`/recipe/${item.id}` as any)}
         style={({ pressed }) => [
           styles.card,
           pressed && styles.cardPressed,
@@ -159,22 +164,15 @@ export default function CommunityFeedModal() {
       >
         {/* Card Header / Image Area */}
         <View style={styles.imageContainer}>
-          {item.imageUrl || item.image ? (
-            <Image source={{ uri: item.imageUrl || item.image }} style={styles.image} />
-          ) : (
-            <View style={styles.placeholderBanner}>
-              <View style={styles.iconCircle}>
-                <MaterialCommunityIcons name="chef-hat" size={26} color="#f59e0b" />
-              </View>
-              <Text style={styles.placeholderTag} numberOfLines={1}>
-                {item.title || item.name || "Specialty Dish"}
-              </Text>
-            </View>
-          )}
+          <RecipeImage
+            uri={item.imageUrl || item.image}
+            title={item.title || item.name || "Specialty Dish"}
+            style={StyleSheet.absoluteFillObject}
+          />
 
           {/* Time Badge */}
           <View style={styles.timeBadge}>
-            <Ionicons name="time-outline" size={12} color="#f4f4f5" style={{ marginRight: 4 }} />
+            <Ionicons name="time-outline" size={12} color={tc("#f4f4f5")} style={{ marginRight: 4 }} />
             <Text style={styles.timeBadgeText}>
               {formatTimeAgo(item.createdAt)}
             </Text>
@@ -191,7 +189,7 @@ export default function CommunityFeedModal() {
             <FontAwesome
               name={isFav ? "heart" : "heart-o"}
               size={15}
-              color={isFav ? "#ef4444" : "#a1a1aa"}
+              color={isFav ? "#ef4444" : tc("#a1a1aa")}
             />
           </Pressable>
         </View>
@@ -236,7 +234,7 @@ export default function CommunityFeedModal() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+        <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
         <ActivityIndicator size="large" color="#f59e0b" />
         <Text style={styles.loadingText}>Gathering community dishes...</Text>
       </View>
@@ -245,13 +243,13 @@ export default function CommunityFeedModal() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
       <ScreenHeader
         title="Community Feed"
         subtitle="Explore public creations from other chefs"
       />
       <FlatList
-        data={recipes}
+        data={recipes.filter((r: any) => !blockedIds.has(r.userId))}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderRecipeCard}
         contentContainerStyle={styles.listContent}
@@ -272,7 +270,7 @@ export default function CommunityFeedModal() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",

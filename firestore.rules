@@ -18,10 +18,16 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create, update: if isUser(uid)
         && request.resource.data.get('uid', uid) == uid;
-      allow delete: if false;
+      // Owners can delete their profile (Settings → Delete Account).
+      allow delete: if isUser(uid);
 
       // Favorites: private to the owner.
       match /favorites/{recipeId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // Chefs this user has blocked: private to the owner.
+      match /blocked/{blockedUid} {
         allow read, write: if isUser(uid);
       }
 
@@ -101,6 +107,16 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 200;
+    }
+
+    // ---------- Content reports ----------
+    // Users can file reports but never read them; review them in the console.
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 100;
+      allow read, update, delete: if false;
     }
 
     // Everything else is closed.

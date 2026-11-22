@@ -16,6 +16,7 @@ import { getAuth } from "firebase/auth";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../../lib/firebase"; // Adjust path if needed
 import ScreenHeader from "../../components/ScreenHeader";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
 interface ChatThread {
   id: string;
@@ -32,6 +33,7 @@ interface ChatThread {
 }
 
 export default function MessagesScreen() {
+  useThemeMode();
   const router = useRouter();
   const auth = getAuth();
   const currentUser = auth.currentUser;
@@ -49,10 +51,12 @@ export default function MessagesScreen() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const list: ChatThread[] = snapshot.docs.map((doc) => ({
+        const list: ChatThread[] = (snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
-        })) as ChatThread[];
+        })) as ChatThread[]).sort((a, b) =>
+          String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
+        );
 
         setThreads(list);
         setLoading(false);
@@ -93,14 +97,14 @@ export default function MessagesScreen() {
           </Text>
         </View>
 
-        <FontAwesome name="chevron-right" size={12} color="#52525b" />
+        <FontAwesome name="chevron-right" size={12} color={tc("#52525b")} />
       </Pressable>
     );
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
       <ScreenHeader title="Messages" />
 
@@ -110,7 +114,7 @@ export default function MessagesScreen() {
         </View>
       ) : threads.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <FontAwesome name="comments-o" size={48} color="#27272a" />
+          <FontAwesome name="comments-o" size={48} color={tc("#27272a")} />
           <Text style={styles.emptyTitle}>No conversations yet</Text>
           <Text style={styles.emptySubtitle}>
             Share a recipe or message a chef from the community to get started.
@@ -128,7 +132,7 @@ export default function MessagesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   container: {
     flex: 1,
     backgroundColor: "#0f1115",

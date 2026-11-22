@@ -14,14 +14,16 @@ import {
   Alert,
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { signOut } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 import { searchRecipes } from "../../../lib/spoonacular";
 import { fetchUserFavorites, toggleFavoriteRecipe } from "../../../lib/favorites";
 import { useRouter } from "expo-router";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../lib/theme";
 
 export default function TwoScreen() {
+  useThemeMode();
+  const router = useRouter();
   const navigation = useNavigation();
 
   // STATE
@@ -77,22 +79,6 @@ export default function TwoScreen() {
     }
   };
 
-// LOGOUT
-const handleLogout = async () => {
-  try {
-    // 1. Sign out of Firebase
-    await signOut(auth);
-
-    // 2. Reset navigation stack to Login screen
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Login" as never }], // Replace "Login" with your exact login route name
-    });
-  } catch (err) {
-    console.error("Logout error:", err);
-    Alert.alert("Logout Error", "Unable to sign out. Please try again.");
-  }
-};
 
   // Scroll Ref for Search Results
   const scrollRef = useRef<ScrollView>(null);
@@ -199,7 +185,7 @@ const handleLogout = async () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={{ paddingBottom: 50 }}
@@ -212,22 +198,30 @@ const handleLogout = async () => {
             style={styles.profileButton}
           >
             <View style={styles.avatarWrapper}>
-              <Image
-                style={styles.avatar}
-                source={{
-                  uri: "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200",
-                }}
-              />
-              <View style={styles.onlineBadge} />
+              {auth.currentUser?.photoURL?.startsWith("http") ? (
+                <Image style={styles.avatar} source={{ uri: auth.currentUser.photoURL }} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: tc("#27272a"), alignItems: "center", justifyContent: "center" }]}>
+                  <Text style={{ color: "#f59e0b", fontWeight: "800", fontSize: 16 }}>
+                    {(auth.currentUser?.displayName || auth.currentUser?.email || "C").charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
             </View>
             <View style={styles.profileText}>
-              <Text style={styles.greeting}>Head Chef</Text>
-              <Text style={styles.username}>Chef Josh</Text>
+              <Text style={styles.greeting}>Discover</Text>
+              <Text style={styles.username} numberOfLines={1}>
+                Find your next dish
+              </Text>
             </View>
           </Pressable>
 
-          <Pressable style={styles.logoutButton} onPress={handleLogout}>
-            <FontAwesome name="sign-out" size={15} color="#ef4444" />
+          <Pressable
+            style={styles.logoutButton}
+            onPress={() => router.push("/(drawer)/(tabs)/five" as any)}
+            accessibilityLabel="Favorites"
+          >
+            <FontAwesome name="bookmark-o" size={15} color="#f59e0b" />
           </Pressable>
         </View>
 
@@ -255,7 +249,7 @@ const handleLogout = async () => {
         {/* NO RESULTS / LOADING STATES */}
         {!loading && noResults && (
           <View style={styles.emptyContainer}>
-            <FontAwesome name="search-minus" size={32} color="#3f3f46" />
+            <FontAwesome name="search-minus" size={32} color={tc("#3f3f46")} />
             <Text style={styles.emptyText}>{searchError ? "Search unavailable" : "No creations found"}</Text>
             <Text style={styles.emptySubtext}>{searchError || "Try adjusting your keywords or categories."}</Text>
           </View>
@@ -357,7 +351,7 @@ const handleLogout = async () => {
                 <FontAwesome
                   name={cat.icon as any}
                   size={13}
-                  color={isActive ? "#0f1115" : "#a1a1aa"}
+                  color={isActive ? tc("#0f1115") : tc("#a1a1aa")}
                   style={{ marginRight: 8 }}
                 />
                 <Text
@@ -456,7 +450,7 @@ const handleLogout = async () => {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",

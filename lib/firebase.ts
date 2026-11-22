@@ -7,6 +7,7 @@ import {
 } from "firebase/auth";
 import { secureStorage } from "./secureStorage";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAOWDHBpfsWLRTHej5mNo1KL03o0OGpuFE",
@@ -30,8 +31,9 @@ const auth =
     : getAuth(app);
 
 const db = getFirestore(app);
+const storage = getStorage(app);
 
-export { app, auth, db };
+export { app, auth, db, storage };
 /** 
   apiKey: "AIzaSyAOWDHBpfsWLRTHej5mNo1KL03o0OGpuFE",
   authDomain: "gastro-b11b1.firebaseapp.com",

@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Image, StatusBar } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { DrawerContentScrollView } from "@react-navigation/drawer";
 import { useRouter, usePathname } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { getAuth } from "firebase/auth";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { db } from "../../lib/firebase";
+import { useNotificationBadge } from "../../lib/notifications";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
 // Daily Tips & Chef Wisdom Collection
 const CHEF_WISDOM = [
@@ -48,9 +48,9 @@ const CHEF_WISDOM = [
 ];
 
 function CustomDrawerContent(props: any) {
+  useThemeMode();
   const router = useRouter();
   const currentPath = usePathname();
-  const [unreadCount, setUnreadCount] = useState(0);
 
   // User Profile State
   const auth = getAuth();
@@ -58,7 +58,6 @@ function CustomDrawerContent(props: any) {
   const userEmail = currentUser?.email || "Chef Guest";
   const displayName = currentUser?.displayName || userEmail.split("@")[0];
 
-  const [chefLevel] = useState("Level 1 Chef");
 
   // Rotating Tip State (Calculates day-of-year index by default)
   const getDayOfYearIndex = () => {
@@ -78,23 +77,7 @@ function CustomDrawerContent(props: any) {
 
   const currentWisdom = CHEF_WISDOM[tipIndex];
 
-  // Real-time listener for notification badge
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const reqRef = collection(db, "users", currentUser.uid, "friendRequests");
-    const q = query(reqRef, where("status", "==", "pending"));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        setUnreadCount(snapshot.size);
-      },
-      (err) => console.error("Error fetching notification badge count:", err)
-    );
-
-    return () => unsubscribe();
-  }, [currentUser]);
+  const unreadCount = useNotificationBadge(currentUser?.uid);
 
   const menuItems = [
     {
@@ -148,7 +131,7 @@ function CustomDrawerContent(props: any) {
       },
     },
     {
-      label: "Other Chef's Recipes",
+      label: "Community Feed",
       icon: "globe",
       path: "/community",
       badge: 0,
@@ -181,7 +164,7 @@ function CustomDrawerContent(props: any) {
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
       <DrawerContentScrollView
         {...props}
         contentContainerStyle={styles.scrollContent}
@@ -196,26 +179,35 @@ function CustomDrawerContent(props: any) {
         </View>
 
         {/* Profile Header */}
-        <View style={styles.profileRow}>
-          <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200",
-            }}
-            style={styles.avatar}
-          />
+        <Pressable
+          style={({ pressed }) => [styles.profileRow, pressed && { opacity: 0.8 }]}
+          onPress={() => {
+            props.navigation.closeDrawer();
+            router.push("/profile" as any);
+          }}
+        >
+          {currentUser?.photoURL?.startsWith("http") ? (
+            <Image source={{ uri: currentUser.photoURL }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.avatarInitial}>
+                {displayName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={styles.profileInfo}>
             <Text style={styles.profileName} numberOfLines={1}>
-              Chef {displayName}
+              {displayName}
             </Text>
             <Text style={styles.profileEmail} numberOfLines={1}>
               {userEmail}
             </Text>
             <View style={styles.badgePill}>
               <FontAwesome name="star" size={9} color="#f59e0b" />
-              <Text style={styles.badgeText}>{chefLevel}</Text>
+              <Text style={styles.badgeText}>View profile</Text>
             </View>
           </View>
-        </View>
+        </Pressable>
 
         {/* Section Title */}
         <Text style={styles.sectionTitle}>EXPLORE</Text>
@@ -245,7 +237,7 @@ function CustomDrawerContent(props: any) {
                     <FontAwesome
                       name={item.icon as any}
                       size={15}
-                      color={isActive ? "#f59e0b" : "#a1a1aa"}
+                      color={isActive ? "#f59e0b" : tc("#a1a1aa")}
                     />
                   </View>
                   <Text
@@ -261,7 +253,7 @@ function CustomDrawerContent(props: any) {
                   {item.badge > 0 && (
                     <View style={styles.notificationBadge}>
                       <Text style={styles.notificationBadgeText}>
-                        {item.badge}
+                        {item.badge > 9 ? "9+" : item.badge}
                       </Text>
                     </View>
                   )}
@@ -294,6 +286,7 @@ function CustomDrawerContent(props: any) {
 }
 
 export default function DrawerLayout() {
+  useThemeMode();
   return (
     <Drawer
       initialRouteName="(tabs)"
@@ -301,7 +294,7 @@ export default function DrawerLayout() {
       screenOptions={{
         headerShown: false,
         drawerStyle: {
-          backgroundColor: "#0f1115",
+          backgroundColor: tc("#0f1115"),
           width: "78%",
         },
       }}
@@ -311,14 +304,26 @@ export default function DrawerLayout() {
       <Drawer.Screen name="notifications" options={{ title: "Notifications" }} />
       <Drawer.Screen name="profile" options={{ title: "Profile" }} />
       <Drawer.Screen name="recipes" options={{ title: "Recipes" }} />
-      <Drawer.Screen name="community" options={{ title: "CommunityRecipes" }} />
+      <Drawer.Screen name="community" options={{ title: "Community Feed" }} />
       <Drawer.Screen name="grocery" options={{ title: "Grocery" }} />
       <Drawer.Screen name="settings" options={{ title: "Settings" }} />
+      <Drawer.Screen name="about" options={{ title: "About" }} />
+      <Drawer.Screen name="legal" options={{ title: "Legal" }} />
     </Drawer>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
+  avatarFallback: {
+    backgroundColor: "#27272a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitial: {
+    color: "#f59e0b",
+    fontSize: 18,
+    fontWeight: "800",
+  },
   outerContainer: {
     flex: 1,
     backgroundColor: "#0f1115",

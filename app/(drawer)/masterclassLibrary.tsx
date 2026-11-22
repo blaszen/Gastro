@@ -16,6 +16,7 @@ import {
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { router } from "expo-router";
 import ScreenHeader from "../../components/ScreenHeader";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -144,6 +145,7 @@ export const juliaChildMasterclasses: Video[] = [
 ];
 
 export default function MasterclassLibraryScreen() {
+  useThemeMode();
   const [activeCategory, setActiveCategory] = useState("All");
 
   const filteredClasses =
@@ -163,7 +165,7 @@ export default function MasterclassLibraryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={statusBarStyle()} />
 
       <ScreenHeader title="Masterclasses" subtitle="The French Chef Curriculum" />
 
@@ -212,7 +214,7 @@ export default function MasterclassLibraryScreen() {
               <FontAwesome
                 name="clock-o"
                 size={10}
-                color="#f4f4f5"
+                color={tc("#f4f4f5")}
                 style={{ marginRight: 4 }}
               />
               <Text style={styles.durationText}>{item.duration}</Text>
@@ -228,7 +230,7 @@ export default function MasterclassLibraryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   container: { flex: 1, backgroundColor: "#0f1115" },
   header: {
     flexDirection: "row",

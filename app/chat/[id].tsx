@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -21,12 +22,14 @@ import {
   doc,
   getDoc,
   addDoc,
+  setDoc,
   query,
   orderBy,
   onSnapshot,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../lib/firebase"; // Adjust path to match your structure
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
 interface Message {
   id: string;
@@ -45,6 +48,7 @@ interface ParticipantInfo {
 }
 
 export default function ChatScreen() {
+  useThemeMode();
   const { id: threadId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const auth = getAuth();
@@ -125,12 +129,24 @@ export default function ChatScreen() {
       const messagesRef = collection(db, "chats", threadId, "messages");
       await addDoc(messagesRef, {
         senderId: currentUser.uid,
-        text: trimmed,
+        text: trimmed.slice(0, 5000),
         type: "text",
         createdAt: serverTimestamp(),
       });
+      // Keep the thread preview and ordering in the Messages list current.
+      await setDoc(
+        doc(db, "chats", threadId),
+        {
+          participants: threadId.split("_"),
+          lastMessage: trimmed.slice(0, 120),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
     } catch (err) {
       console.error("Error sending message:", err);
+      setInputText(trimmed);
+      Alert.alert("Not sent", "Your message couldn't be sent. Please try again.");
     }
   };
 
@@ -175,7 +191,7 @@ export default function ChatScreen() {
                   }
                 >
                   <Text style={styles.viewRecipeBtnText}>Open Recipe</Text>
-                  <FontAwesome name="chevron-right" size={10} color="#0f1115" />
+                  <FontAwesome name="chevron-right" size={10} color={tc("#0f1115")} />
                 </Pressable>
               )}
             </View>
@@ -199,7 +215,7 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -268,7 +284,7 @@ export default function ChatScreen() {
             onPress={handleSendMessage}
             disabled={!inputText.trim()}
           >
-            <FontAwesome name="paper-plane" size={14} color="#0f1115" />
+            <FontAwesome name="paper-plane" size={14} color={tc("#0f1115")} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -276,7 +292,7 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   container: {
     flex: 1,
     backgroundColor: "#0f1115",

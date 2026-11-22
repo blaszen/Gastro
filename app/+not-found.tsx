@@ -2,8 +2,10 @@ import { Link, Stack } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
 import { Text, View } from '@/components/Themed';
+import { themedStyles, useThemeMode } from "../lib/theme";
 
 export default function NotFoundScreen() {
+  useThemeMode();
   return (
     <>
       <Stack.Screen options={{ title: 'Oops!' }} />
@@ -18,7 +20,7 @@ export default function NotFoundScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   container: {
     flex: 1,
     alignItems: 'center',

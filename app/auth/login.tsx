@@ -33,9 +33,20 @@ export default function Login() {
     setError("");
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
     } catch (e: any) {
-      setError(e.message.replace("Firebase: ", ""));
+      const code = e?.code || "";
+      setError(
+        code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found"
+          ? "Email or password is incorrect."
+          : code === "auth/invalid-email"
+          ? "That email address doesn't look right."
+          : code === "auth/too-many-requests"
+          ? "Too many attempts. Please wait a moment or reset your password."
+          : code === "auth/network-request-failed"
+          ? "No connection. Check your internet and try again."
+          : "Couldn't sign in. Please try again."
+      );
       setLoading(false);
     }
   };

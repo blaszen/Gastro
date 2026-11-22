@@ -4,15 +4,18 @@ import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { tc, useThemeMode } from "../../../lib/theme";
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
 }) {
+  useThemeMode();
   return <FontAwesome size={22} style={{ marginBottom: -3 }} {...props} />;
 }
 
 export default function TabLayout() {
+  useThemeMode();
   return (
     <Tabs
       screenOptions={{
@@ -20,8 +23,8 @@ export default function TabLayout() {
         tabBarInactiveTintColor: '#71717a', // Muted gray for inactive tabs
         headerShown: useClientOnlyValue(false, true),
         tabBarStyle: {
-          backgroundColor: '#0f1115', // Dark base color matching screen canvases
-          borderTopColor: '#27272a', // Subtle dark border line
+          backgroundColor: tc("#0f1115"), // Dark base color matching screen canvases
+          borderTopColor: tc("#27272a"), // Subtle dark border line
           borderTopWidth: 1,
           height: Platform.OS === 'ios' ? 88 : 64,
           paddingBottom: Platform.OS === 'ios' ? 28 : 10,
@@ -56,14 +59,6 @@ export default function TabLayout() {
         options={{
           title: 'Create',
           tabBarIcon: ({ color }) => <TabBarIcon name="pencil" color={color} />,
-          headerShown: false,
-        }}
-      />
-      <Tabs.Screen
-        name="four"
-        options={{
-          title: 'Tools',
-          tabBarIcon: ({ color }) => <TabBarIcon name="wrench" color={color} />,
           headerShown: false,
         }}
       />

@@ -15,8 +15,11 @@ import {
 import { MaterialCommunityIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
 import { db, auth } from "../../lib/firebase";
 import ScreenHeader from "../../components/ScreenHeader";
+import RecipeImage from "../../components/RecipeImage";
+import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
 export default function RecipesModal() {
+  useThemeMode();
   const [recipes, setRecipes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -80,7 +83,7 @@ export default function RecipesModal() {
 
     return (
       <Pressable
-        onPress={() => router.push(`/(modals)/recipe/${item.id}`)}
+        onPress={() => router.push(`/recipe/${item.id}` as any)}
         style={({ pressed }) => [
           styles.card,
           pressed && styles.cardPressed,
@@ -88,22 +91,26 @@ export default function RecipesModal() {
       >
         {/* Card Header / Image Area */}
         <View style={styles.imageContainer}>
-          {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={styles.image} />
-          ) : (
-            <View style={styles.placeholderBanner}>
-              <View style={styles.iconCircle}>
-                <MaterialCommunityIcons name="chef-hat" size={26} color="#f59e0b" />
-              </View>
-              <Text style={styles.placeholderTag} numberOfLines={1}>
-                {item.title || "Specialty Dish"}
-              </Text>
-            </View>
-          )}
+          <RecipeImage
+            uri={item.imageUrl}
+            title={item.title || "Specialty Dish"}
+            style={StyleSheet.absoluteFillObject}
+          />
+
+          {/* Visibility Pill */}
+          <View style={styles.visibilityBadge}>
+            <Ionicons
+              name={item.isPublic ? "globe-outline" : "lock-closed-outline"}
+              size={12}
+              color="#f59e0b"
+              style={{ marginRight: 4 }}
+            />
+            <Text style={styles.timeBadgeText}>{item.isPublic ? "Public" : "Private"}</Text>
+          </View>
 
           {/* Floating Time Pill */}
           <View style={styles.timeBadge}>
-            <Ionicons name="time-outline" size={12} color="#f4f4f5" style={{ marginRight: 4 }} />
+            <Ionicons name="time-outline" size={12} color={tc("#f4f4f5")} style={{ marginRight: 4 }} />
             <Text style={styles.timeBadgeText}>
               {formatTimeAgo(item.createdAt)}
             </Text>
@@ -150,7 +157,7 @@ export default function RecipesModal() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+        <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
         <ActivityIndicator size="large" color="#f59e0b" />
         <Text style={styles.loadingText}>Gathering recipes...</Text>
       </View>
@@ -159,7 +166,7 @@ export default function RecipesModal() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f1115" />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
       <ScreenHeader
         title="My Recipes"
@@ -188,7 +195,7 @@ export default function RecipesModal() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles({
   safeArea: {
     flex: 1,
     backgroundColor: "#0f1115",
@@ -306,6 +313,19 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 12,
     right: 12,
+    backgroundColor: "rgba(15, 17, 21, 0.85)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 0.5,
+    borderColor: "#27272a",
+  },
+  visibilityBadge: {
+    position: "absolute",
+    top: 12,
+    left: 12,
     backgroundColor: "rgba(15, 17, 21, 0.85)",
     paddingHorizontal: 10,
     paddingVertical: 5,
