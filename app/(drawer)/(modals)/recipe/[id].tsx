@@ -18,6 +18,8 @@ import { MaterialCommunityIcons, Ionicons, FontAwesome } from "@expo/vector-icon
 import { db, auth, storage } from "../../../../lib/firebase";
 import { addItemsToList } from "../../../../lib/grocery";
 import { REPORT_REASONS, blockUser, reportRecipe } from "../../../../lib/moderation";
+import { useFavoriteIds } from "../../../../lib/community";
+import { toggleFavoriteRecipe } from "../../../../lib/favorites";
 import RecipeImage from "../../../../components/RecipeImage";
 import ShareRecipeModal from "../../../../components/ShareRecipeModal"; // Adjust path to ShareRecipeModal if needed
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../../lib/theme";
@@ -33,6 +35,20 @@ export default function RecipeModal() {
 
   const [busy, setBusy] = useState<"grocery" | "delete" | null>(null);
   const isOwner = !!recipe && recipe.userId === auth.currentUser?.uid;
+  const favoriteIds = useFavoriteIds(auth.currentUser?.uid);
+  const isFav = favoriteIds.has(String(id));
+
+  const toggleFavorite = async () => {
+    if (!recipe) return;
+    try {
+      await toggleFavoriteRecipe(
+        { id: String(id), title: recipe.title, imageUrl: recipe.imageUrl || "", sourceUrl: `/recipe/${id}` },
+        isFav
+      );
+    } catch {
+      Alert.alert("Error", "Couldn't update your favorites.");
+    }
+  };
 
   // Live so edits made elsewhere show up immediately.
   useEffect(() => {
@@ -192,8 +208,8 @@ export default function RecipeModal() {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
         <View style={styles.topBar}>
-          <Pressable onPress={() => router.back()} style={styles.closeBtn}>
-            <Ionicons name="close" size={20} color={tc("#a1a1aa")} />
+          <Pressable onPress={() => router.back()} style={styles.closeBtn} accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" size={20} color={tc("#f4f4f5")} />
           </Pressable>
         </View>
         <View style={styles.emptyContainer}>
@@ -213,34 +229,42 @@ export default function RecipeModal() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
-      {/* Top Action Bar */}
+      {/* Top Action Bar: back on the left, actions on the right */}
       <View style={styles.topBar}>
-        {/* Share Button */}
         <Pressable
-          onPress={() => setShareModalVisible(true)}
-          style={({ pressed }) => [styles.shareBtn, pressed && styles.pressed]}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/community" as any))}
+          style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+          accessibilityLabel="Go back"
+          hitSlop={6}
         >
-          <FontAwesome name="share-alt" size={13} color="#f59e0b" />
-          <Text style={styles.shareBtnText}>Share</Text>
+          <Ionicons name="chevron-back" size={20} color={tc("#f4f4f5")} />
         </Pressable>
 
-        <View style={{ flexDirection: "row", gap: 10 }}>
-        {!isOwner ? (
+        <View style={styles.topActions}>
           <Pressable
-            onPress={handleMore}
-            style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
-            accessibilityLabel="More options"
+            onPress={toggleFavorite}
+            style={({ pressed }) => [styles.favBtn, pressed && styles.pressed]}
+            accessibilityLabel={isFav ? "Remove from favorites" : "Add to favorites"}
           >
-            <Ionicons name="ellipsis-horizontal" size={18} color={tc("#a1a1aa")} />
+            <FontAwesome name={isFav ? "heart" : "heart-o"} size={15} color={isFav ? "#ef4444" : tc("#f4f4f5")} />
+            {recipe.favoriteCount ? <Text style={styles.favCount}>{recipe.favoriteCount}</Text> : null}
           </Pressable>
-        ) : null}
-        {/* Close Button */}
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
-        >
-          <Ionicons name="close" size={20} color={tc("#a1a1aa")} />
-        </Pressable>
+          <Pressable
+            onPress={() => setShareModalVisible(true)}
+            style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+            accessibilityLabel="Send to a friend"
+          >
+            <FontAwesome name="paper-plane-o" size={15} color={tc("#f4f4f5")} />
+          </Pressable>
+          {!isOwner ? (
+            <Pressable
+              onPress={handleMore}
+              style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+              accessibilityLabel="More options"
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={tc("#f4f4f5")} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -272,7 +296,11 @@ export default function RecipeModal() {
         <View style={styles.detailsHeader}>
           <Text style={styles.title}>{recipe.title || "Untitled Recipe"}</Text>
 
-          <View style={styles.authorBadge}>
+          <Pressable
+            style={({ pressed }) => [styles.authorBadge, pressed && styles.pressed]}
+            onPress={() => recipe.userId && router.push(`/chef/${recipe.userId}` as any)}
+            accessibilityLabel="View chef profile"
+          >
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
                 {(recipe.createdBy || "C").charAt(0).toUpperCase()}
@@ -281,7 +309,8 @@ export default function RecipeModal() {
             <Text style={styles.byline}>
               Created by <Text style={styles.authorName}>{formatAuthorName(recipe.createdBy)}</Text>
             </Text>
-          </View>
+            <Ionicons name="chevron-forward" size={14} color={tc("#71717a")} />
+          </Pressable>
         </View>
 
         {/* Quick facts */}
@@ -406,6 +435,21 @@ export default function RecipeModal() {
 
 const styles = themedStyles({
   disabled: { opacity: 0.5 },
+  topActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  favBtn: {
+    height: 36,
+    minWidth: 36,
+    paddingHorizontal: 11,
+    borderRadius: 18,
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  favCount: { color: "#f4f4f5", fontWeight: "800", fontSize: 13 },
   metaRow: { flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" },
   metaChip: {
     flexDirection: "row",

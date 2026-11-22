@@ -68,9 +68,9 @@ const styles = themedStyles({
     gap: 16,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: "#1c1f26",
     borderWidth: 1,
     borderColor: "#27272a",
@@ -86,7 +86,7 @@ const styles = themedStyles({
   },
   title: {
     fontSize: 24,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#f4f4f5",
     letterSpacing: -0.5,
     textAlign: "right",

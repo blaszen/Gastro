@@ -32,10 +32,16 @@ export default function RecipeImage({ uri, title, style, imageStyle, iconSize = 
         />
       ) : (
         <View style={styles.placeholder}>
-          <View style={styles.iconCircle}>
+          <View
+            style={[
+              styles.iconCircle,
+              { width: iconSize * 2.15, height: iconSize * 2.15, borderRadius: iconSize * 1.1 },
+              iconSize < 20 && { marginBottom: 0 },
+            ]}
+          >
             <MaterialCommunityIcons name="chef-hat" size={iconSize} color="#f59e0b" />
           </View>
-          {title ? (
+          {title && iconSize >= 20 ? (
             <Text style={styles.tag} numberOfLines={1}>
               {title}
             </Text>

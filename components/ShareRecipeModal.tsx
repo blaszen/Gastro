@@ -206,15 +206,15 @@ const handleOpenChat = (friendUid: string) => {
         <View style={styles.sheet}>
           {/* Header */}
           <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Send Recipe to Chef</Text>
-              <Text style={styles.subtitle} numberOfLines={1}>
+            <Pressable onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close" hitSlop={6}>
+              <FontAwesome name="times" size={16} color={tc("#a1a1aa")} />
+            </Pressable>
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <Text style={styles.title}>Send to a Chef</Text>
+              <Text style={[styles.subtitle, { textAlign: "right" }]} numberOfLines={1}>
                 {recipe?.title}
               </Text>
             </View>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
-              <FontAwesome name="times" size={16} color={tc("#a1a1aa")} />
-            </Pressable>
           </View>
 
           {/* Friends List */}

@@ -21,6 +21,7 @@ import { db, auth } from "../../../lib/firebase";
 import { MaterialCommunityIcons, FontAwesome } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { uploadImageAsync } from "../../../lib/uploadImage";
+import TabHeader from "../../../components/TabHeader";
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../lib/theme";
 
 export default function TabThreeScreen() {
@@ -218,25 +219,17 @@ export default function TabThreeScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={true}
         >
+          <TabHeader
+            title={isEditing ? "Edit Recipe" : "Create"}
+            subtitle={isEditing ? "Update your dish" : "Share your culinary creation"}
+          />
           <View style={styles.contentContainer}>
-            {/* Header */}
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>
-                {isEditing ? "Edit Recipe" : "Create Recipe"}
-                <Text style={styles.brandDot}>.</Text>
-              </Text>
-              <Text style={styles.headerSubtitle}>
-                {isEditing
-                  ? "Update the details, photo or visibility of your dish"
-                  : "Craft and share your culinary creation"}
-              </Text>
-              {isEditing ? (
-                <Pressable onPress={exitEditing} style={styles.cancelEdit} hitSlop={8}>
-                  <FontAwesome name="times" size={12} color={tc("#a1a1aa")} />
-                  <Text style={styles.cancelEditText}>Cancel editing</Text>
-                </Pressable>
-              ) : null}
-            </View>
+            {isEditing ? (
+              <Pressable onPress={exitEditing} style={styles.cancelEdit} hitSlop={8}>
+                <FontAwesome name="times" size={12} color={tc("#a1a1aa")} />
+                <Text style={styles.cancelEditText}>Cancel editing</Text>
+              </Pressable>
+            ) : null}
 
             {loadingRecipe ? (
               <ActivityIndicator color="#f59e0b" style={{ marginVertical: 24 }} />
@@ -415,8 +408,8 @@ const styles = themedStyles({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    alignSelf: "flex-start",
-    marginTop: 10,
+    alignSelf: "flex-end",
+    marginBottom: 14,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 14,
@@ -449,7 +442,7 @@ const styles = themedStyles({
   },
   contentContainer: {
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 0,
   },
 
   // Header

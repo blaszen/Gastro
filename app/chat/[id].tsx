@@ -217,27 +217,36 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
-      {/* Header */}
+      {/* Header: back on the left, who you're chatting with on the right */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={() => router.back()} accessibilityLabel="Go back" hitSlop={8}>
           <FontAwesome name="chevron-left" size={16} color="#f59e0b" />
         </Pressable>
 
-        <Image
-          source={{
-            uri:
-              otherUser?.photoURL ||
-              "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200",
+        <Pressable
+          style={styles.headerRight}
+          onPress={() => {
+            const other = threadId ? String(threadId).split("_").find((u) => u !== currentUser?.uid) : null;
+            if (other) router.push(`/chef/${other}` as any);
           }}
-          style={styles.avatar}
-        />
-
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerName}>
-            {otherUser?.displayName || "Chef"}
-          </Text>
-          <Text style={styles.headerSubtitle}>Kitchen Network</Text>
-        </View>
+          accessibilityLabel="View profile"
+        >
+          <View style={styles.headerInfo}>
+            <Text style={styles.headerName} numberOfLines={1}>
+              {otherUser?.displayName || "Chef"}
+            </Text>
+            <Text style={styles.headerSubtitle}>View profile</Text>
+          </View>
+          {otherUser?.photoURL?.startsWith("http") ? (
+            <Image source={{ uri: otherUser.photoURL }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.avatarInitial}>
+                {(otherUser?.displayName || "C").charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </Pressable>
       </View>
 
       {/* Messages Feed */}
@@ -311,13 +320,17 @@ const styles = themedStyles({
     marginRight: 8,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginLeft: 12,
   },
+  avatarFallback: { backgroundColor: "#27272a", alignItems: "center", justifyContent: "center" },
+  avatarInitial: { color: "#f59e0b", fontWeight: "800", fontSize: 15 },
+  headerRight: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end" },
   headerInfo: {
-    flex: 1,
+    flexShrink: 1,
+    alignItems: "flex-end",
   },
   headerName: {
     fontSize: 15,
