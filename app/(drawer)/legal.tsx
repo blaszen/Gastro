@@ -20,7 +20,7 @@ const PRIVACY: { h: string; p: string }[] = [
   },
   {
     h: "Service providers",
-    p: "Data is stored with Google Firebase (authentication, database and file storage). Recipe searches are sent to Spoonacular through our server; your account details are not shared with Spoonacular.",
+    p: "Data is stored with Google Firebase (authentication, database and file storage). Recipe searches are sent to Spoonacular through our server; your account details are not shared with Spoonacular. If you use Generate with AI, the text you type is sent through our server to Google's Gemini model on Google Cloud to write the recipe; it isn't linked to your name or email.",
   },
   {
     h: "What we don't do",

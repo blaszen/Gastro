@@ -146,3 +146,118 @@ export const onFavoriteAdded = onDocumentCreated("users/{uid}/favorites/{recipeI
 export const onFavoriteRemoved = onDocumentDeleted("users/{uid}/favorites/{recipeId}", (event) =>
   bumpFavoriteCount(event.params.recipeId, -1)
 );
+
+// ---------------------------------------------------------------- AI recipes
+// Gemini on Vertex AI, called with the function's own service account, so no
+// API key is needed. Billed to the project's Blaze plan.
+const GEMINI_MODEL = "gemini-3.5-flash";
+const AI_DAILY_LIMIT = 15;
+const AI_USAGE_COLLECTION = "aiUsage"; // server-only (catch-all rule denies clients)
+
+async function accessToken() {
+  const res = await fetch(
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+    { headers: { "Metadata-Flavor": "Google" } }
+  );
+  if (!res.ok) throw new Error(`metadata token ${res.status}`);
+  return ((await res.json()) as { access_token: string }).access_token;
+}
+
+const RECIPE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    refused: { type: "BOOLEAN" },
+    title: { type: "STRING" },
+    description: { type: "STRING" },
+    ingredients: { type: "ARRAY", items: { type: "STRING" } },
+    instructions: { type: "ARRAY", items: { type: "STRING" } },
+    prepTimeMinutes: { type: "INTEGER" },
+    servings: { type: "INTEGER" },
+  },
+  required: ["refused", "title", "ingredients", "instructions", "prepTimeMinutes", "servings"],
+};
+
+const SYSTEM_PROMPT = `You are GASTRO's recipe developer. Turn the cook's request into one complete, tested-style home recipe.
+Rules:
+- Ingredients: one per item, with quantities in US units and metric in parentheses where useful (e.g. "2 cups (480 ml) chicken stock").
+- Instructions: clear numbered-style steps without the numbers, each one action, with times, temperatures (°F and °C) and doneness cues.
+- Respect any dietary needs, allergies, equipment, time limits or ingredients the cook mentions.
+- prepTimeMinutes is total active plus cooking time. servings is a whole number.
+- Use safe food-handling temperatures for meat, poultry, fish and eggs.
+- If the request is not about food or cooking, or asks for something unsafe or inedible, set refused to true and leave the other fields minimal.`;
+
+export const generateRecipe = onCall({ maxInstances: 10, timeoutSeconds: 60 }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to use the recipe generator.");
+
+  const prompt = String(req.data?.prompt || "").trim().slice(0, 600);
+  if (prompt.length < 3) throw new HttpsError("invalid-argument", "Describe the dish you want.");
+
+  // Per-user daily limit keeps costs predictable.
+  const day = new Date().toISOString().slice(0, 10);
+  const usageRef = db.collection(AI_USAGE_COLLECTION).doc(`${uid}_${day}`);
+  const used = await db.runTransaction(async (tx) => {
+    const n = ((await tx.get(usageRef)).data()?.count as number) || 0;
+    if (n >= AI_DAILY_LIMIT) return n;
+    tx.set(usageRef, { uid, day, count: n + 1, expiresAt: Timestamp.fromMillis(Date.now() + 3 * 86400000) });
+    return n;
+  });
+  if (used >= AI_DAILY_LIMIT) {
+    throw new HttpsError("resource-exhausted", `You've used all ${AI_DAILY_LIMIT} AI recipes for today. Try again tomorrow.`);
+  }
+
+  const project = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
+  const url = `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/publishers/google/models/${GEMINI_MODEL}:generateContent`;
+
+  let res: Awaited<ReturnType<typeof fetch>>;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${await accessToken()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 4096,
+          responseMimeType: "application/json",
+          responseSchema: RECIPE_SCHEMA,
+        },
+      }),
+    });
+  } catch (err) {
+    logger.error("Gemini request failed", { err: String(err) });
+    throw new HttpsError("unavailable", "The recipe generator is unavailable. Please try again.");
+  }
+
+  if (!res.ok) {
+    logger.error("Gemini error", { status: res.status, body: (await res.text()).slice(0, 2000) });
+    throw new HttpsError("internal", "The recipe generator couldn't create a recipe. Please try again.");
+  }
+
+  const body: any = await res.json();
+  const text = body?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("") || "";
+  let recipe: any;
+  try {
+    recipe = JSON.parse(text);
+  } catch {
+    logger.error("Gemini returned non-JSON", { text: text.slice(0, 500) });
+    throw new HttpsError("internal", "The recipe generator returned something unexpected. Please try again.");
+  }
+  if (recipe.refused) {
+    throw new HttpsError("failed-precondition", "That doesn't look like a recipe request. Try describing a dish.");
+  }
+
+  const strList = (v: unknown, max: number) =>
+    (Array.isArray(v) ? v : []).map((s) => String(s).trim()).filter(Boolean).slice(0, max);
+
+  return {
+    title: String(recipe.title || "").slice(0, 120),
+    description: String(recipe.description || "").slice(0, 400),
+    ingredients: strList(recipe.ingredients, 40),
+    instructions: strList(recipe.instructions, 30),
+    prepTimeMinutes: Math.max(0, Math.min(1440, Number(recipe.prepTimeMinutes) || 0)),
+    servings: Math.max(1, Math.min(50, Number(recipe.servings) || 1)),
+    remaining: AI_DAILY_LIMIT - used - 1,
+  };
+});
