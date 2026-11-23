@@ -68,11 +68,11 @@ export default function Login() {
           <View style={styles.headerContainer}>
             <View style={styles.badge}>
               <MaterialCommunityIcons name="chef-hat" size={16} color="#f59e0b" />
-              <Text style={styles.badgeText}>KITCHEN OPERATIONS PLATFORM</Text>
+              <Text style={styles.badgeText}>COOK · SHARE · LEARN</Text>
             </View>
 
             <Text style={styles.brandTitle}>GASTRO</Text>
-            <Text style={styles.tagline}>"Without order, there is only chaos."</Text>
+            <Text style={styles.tagline}>Your kitchen, your community.</Text>
 
             {/* Value Propositions Grid */}
             <View style={styles.propsContainer}>
@@ -82,13 +82,13 @@ export default function Login() {
               </View>
               <View style={styles.propDot} />
               <View style={styles.propItem}>
-                <Feather name="pie-chart" size={14} color="#d97706" />
-                <Text style={styles.propText}>Food Costing</Text>
+                <Feather name="award" size={14} color="#d97706" />
+                <Text style={styles.propText}>Masterclass</Text>
               </View>
               <View style={styles.propDot} />
               <View style={styles.propItem}>
-                <Feather name="layers" size={14} color="#d97706" />
-                <Text style={styles.propText}>Batch Scaling</Text>
+                <Feather name="users" size={14} color="#d97706" />
+                <Text style={styles.propText}>Community</Text>
               </View>
             </View>
           </View>
@@ -152,7 +152,7 @@ export default function Login() {
               {loading ? (
                 <ActivityIndicator color="#0f172a" />
               ) : (
-                <Text style={styles.primaryButtonText}>Access Kitchen</Text>
+                <Text style={styles.primaryButtonText}>Sign In</Text>
               )}
             </TouchableOpacity>
 

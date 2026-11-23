@@ -123,6 +123,13 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 200;
     }
 
+    // ---------- Culinary Services partners ----------
+    // Curated by the Gastro team in the Firebase console; read-only in the app.
+    match /partners/{partnerId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     // ---------- Content reports ----------
     // Users can file reports but never read them; review them in the console.
     match /reports/{reportId} {
