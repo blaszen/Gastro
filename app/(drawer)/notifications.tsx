@@ -85,7 +85,7 @@ export default function NotificationsModalScreen() {
       !item.isMine && !!item.createdAt && (!highlightSince || item.createdAt > highlightSince);
     return (
       <Pressable
-        style={({ pressed }) => [styles.activityCard, isNew && styles.activityCardNew, pressed && { opacity: 0.8 }]}
+        style={[styles.activityCard, isNew && styles.activityCardNew]}
         onPress={() => router.push(`/recipe/${item.id}` as any)}
       >
         <RecipeImage uri={item.imageUrl} style={styles.activityThumb} iconSize={16} />

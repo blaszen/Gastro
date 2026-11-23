@@ -33,7 +33,7 @@ export default function TabHeader({ title, subtitle, action }: Props) {
     <View style={styles.header}>
       <Pressable
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-        style={({ pressed }) => [styles.avatarRing, pressed && styles.pressed]}
+        style={styles.avatarRing}
         accessibilityRole="button"
         accessibilityLabel="Open menu"
         hitSlop={6}
@@ -65,7 +65,7 @@ export default function TabHeader({ title, subtitle, action }: Props) {
         {action ? (
           <Pressable
             onPress={action.onPress}
-            style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
+            style={styles.actionBtn}
             accessibilityRole="button"
             accessibilityLabel={action.label}
             hitSlop={6}

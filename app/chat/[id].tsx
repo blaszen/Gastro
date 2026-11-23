@@ -285,11 +285,7 @@ export default function ChatScreen() {
             multiline
           />
           <Pressable
-            style={({ pressed }) => [
-              styles.sendBtn,
-              !inputText.trim() && styles.sendBtnDisabled,
-              pressed && { opacity: 0.8 },
-            ]}
+            style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
             onPress={handleSendMessage}
             disabled={!inputText.trim()}
           >

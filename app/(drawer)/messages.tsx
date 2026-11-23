@@ -76,7 +76,7 @@ export default function MessagesScreen() {
 
     return (
       <Pressable
-        style={({ pressed }) => [styles.chatCard, pressed && styles.chatCardPressed]}
+        style={styles.chatCard}
         onPress={() => router.push(`/chat/${item.id}`)}
       >
         <Image

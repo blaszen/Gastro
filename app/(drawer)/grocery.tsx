@@ -313,11 +313,7 @@ export default function GroceryScreen() {
           />
           <Pressable
             onPress={addItem}
-            style={({ pressed }) => [
-              styles.addBtn,
-              !newName.trim() && styles.addBtnDisabled,
-              pressed && styles.pressed,
-            ]}
+            style={[styles.addBtn, !newName.trim() && styles.addBtnDisabled]}
             disabled={!newName.trim()}
             accessibilityLabel="Add item"
           >
@@ -371,7 +367,7 @@ export default function GroceryScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => deleteItem(item.id)}
-                  style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}
+                  style={styles.deleteBtn}
                   hitSlop={12}
                   accessibilityLabel={`Delete ${item.name}`}
                 >

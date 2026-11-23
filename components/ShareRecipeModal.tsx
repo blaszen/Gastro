@@ -239,10 +239,7 @@ const handleOpenChat = (friendUid: string) => {
 return (
     // Wrap the ENTIRE card in Pressable so clicking anywhere on the friend sends/opens chat
     <Pressable
-      style={({ pressed }) => [
-        styles.friendCard,
-        pressed && { opacity: 0.8, backgroundColor: tc("#1f242d") },
-      ]}
+      style={styles.friendCard}
       onPress={() => {
         if (isSent) {
           handleOpenChat(item.uid);

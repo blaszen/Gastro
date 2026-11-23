@@ -84,10 +84,7 @@ export default function RecipesModal() {
     return (
       <Pressable
         onPress={() => router.push(`/recipe/${item.id}` as any)}
-        style={({ pressed }) => [
-          styles.card,
-          pressed && styles.cardPressed,
-        ]}
+        style={styles.card}
       >
         {/* Card Header / Image Area */}
         <View style={styles.imageContainer}>

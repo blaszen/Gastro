@@ -233,7 +233,7 @@ export default function RecipeModal() {
       <View style={styles.topBar}>
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/community" as any))}
-          style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+          style={styles.closeBtn}
           accessibilityLabel="Go back"
           hitSlop={6}
         >
@@ -243,7 +243,7 @@ export default function RecipeModal() {
         <View style={styles.topActions}>
           <Pressable
             onPress={toggleFavorite}
-            style={({ pressed }) => [styles.favBtn, pressed && styles.pressed]}
+            style={styles.favBtn}
             accessibilityLabel={isFav ? "Remove from favorites" : "Add to favorites"}
           >
             <FontAwesome name={isFav ? "heart" : "heart-o"} size={15} color={isFav ? "#ef4444" : tc("#f4f4f5")} />
@@ -251,7 +251,7 @@ export default function RecipeModal() {
           </Pressable>
           <Pressable
             onPress={() => setShareModalVisible(true)}
-            style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+            style={styles.closeBtn}
             accessibilityLabel="Send to a friend"
           >
             <FontAwesome name="paper-plane-o" size={15} color={tc("#f4f4f5")} />
@@ -259,7 +259,7 @@ export default function RecipeModal() {
           {!isOwner ? (
             <Pressable
               onPress={handleMore}
-              style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+              style={styles.closeBtn}
               accessibilityLabel="More options"
             >
               <Ionicons name="ellipsis-horizontal" size={18} color={tc("#f4f4f5")} />
@@ -297,7 +297,7 @@ export default function RecipeModal() {
           <Text style={styles.title}>{recipe.title || "Untitled Recipe"}</Text>
 
           <Pressable
-            style={({ pressed }) => [styles.authorBadge, pressed && styles.pressed]}
+            style={styles.authorBadge}
             onPress={() => recipe.userId && router.push(`/chef/${recipe.userId}` as any)}
             accessibilityLabel="View chef profile"
           >
@@ -336,7 +336,7 @@ export default function RecipeModal() {
         {/* Actions */}
         <View style={styles.actionRow}>
           <Pressable
-            style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed, (busy || ingredientsList.length === 0) && styles.disabled]}
+            style={[styles.primaryAction, (busy || ingredientsList.length === 0) && styles.disabled]}
             onPress={handleAddToGrocery}
             disabled={!!busy || ingredientsList.length === 0}
           >
@@ -352,7 +352,7 @@ export default function RecipeModal() {
           {isOwner ? (
             <>
               <Pressable
-                style={({ pressed }) => [styles.iconAction, pressed && styles.pressed]}
+                style={styles.iconAction}
                 onPress={handleEdit}
                 disabled={!!busy}
                 accessibilityLabel="Edit recipe"
@@ -360,7 +360,7 @@ export default function RecipeModal() {
                 <FontAwesome name="pencil" size={15} color={tc("#f4f4f5")} />
               </Pressable>
               <Pressable
-                style={({ pressed }) => [styles.iconAction, styles.iconActionDanger, pressed && styles.pressed]}
+                style={[styles.iconAction, styles.iconActionDanger]}
                 onPress={handleDelete}
                 disabled={!!busy}
                 accessibilityLabel="Delete recipe"

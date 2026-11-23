@@ -374,11 +374,7 @@ export default function TabThreeScreen() {
 
             {/* Action Button */}
             <Pressable
-              style={({ pressed }) => [
-                styles.submitButton,
-                loading && styles.submitButtonDisabled,
-                pressed && styles.submitButtonPressed,
-              ]}
+              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
               onPress={handleSubmit}
               disabled={loading || loadingRecipe}
             >
