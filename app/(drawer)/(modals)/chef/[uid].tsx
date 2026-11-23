@@ -13,10 +13,18 @@ import {
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../../../../lib/firebase";
 import { useChefRecipes, PublicProfile } from "../../../../lib/community";
 import { blockUser } from "../../../../lib/moderation";
+import {
+  acceptFriendRequest,
+  cancelFriendRequest,
+  openChat as openChatThread,
+  sendFriendRequest,
+  useIncomingRequests,
+  useSentRequestIds,
+} from "../../../../lib/social";
 import ScreenHeader from "../../../../components/ScreenHeader";
 import RecipeImage from "../../../../components/RecipeImage";
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../../lib/theme";
@@ -34,8 +42,11 @@ export default function ChefProfileScreen() {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [isFriend, setIsFriend] = useState(false);
-  const [requestSent, setRequestSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const sentIds = useSentRequestIds(isMe ? null : me?.uid);
+  const incoming = useIncomingRequests(isMe ? null : me?.uid);
+  const requestSent = !!uid && sentIds.has(uid);
+  const incomingReq = incoming.find((r) => r.fromUid === uid);
   const { recipes, loading: loadingRecipes } = useChefRecipes(uid);
 
   const favoritesReceived = useMemo(
@@ -61,50 +72,37 @@ export default function ChefProfileScreen() {
     );
   }, [uid, me?.uid]);
 
-  const sendRequest = async () => {
-    if (!me || !uid) return;
+  const act = async (fn: () => Promise<any>, msg: string) => {
     setBusy(true);
     try {
-      await setDoc(doc(db, "users", uid, "friendRequests", me.uid), {
-        fromUid: me.uid,
-        fromEmail: me.email || "",
-        fromName: me.displayName || "Chef",
-        status: "pending",
-        createdAt: new Date().toISOString(),
-      });
-      setRequestSent(true);
+      await fn();
     } catch (err) {
-      console.error("Friend request failed:", err);
-      Alert.alert("Error", "Couldn't send the request. Please try again.");
+      console.error(msg, err);
+      Alert.alert("Error", msg);
     } finally {
       setBusy(false);
     }
   };
 
-  const openChat = async () => {
-    if (!me || !uid) return;
-    const threadId = [me.uid, uid].sort().join("_");
-    setBusy(true);
-    try {
-      await setDoc(
-        doc(db, "chats", threadId),
-        {
-          participants: [me.uid, uid].sort(),
-          participantData: {
-            [me.uid]: { displayName: me.displayName || "Chef", email: me.email || "", photoURL: me.photoURL || "" },
-            [uid]: { displayName: name, email: profile?.email || "", photoURL: profile?.photoURL || "" },
-          },
-        },
-        { merge: true }
-      );
-      router.push(`/chat/${threadId}` as any);
-    } catch (err) {
-      console.error("Open chat failed:", err);
-      Alert.alert("Error", "Couldn't open the chat. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const sendRequest = () =>
+    me && uid && act(() => sendFriendRequest(me, { uid, displayName: name }), "Couldn't send the request. Please try again.");
+
+  const cancelRequest = () =>
+    me && uid &&
+    Alert.alert("Cancel friend request?", undefined, [
+      { text: "Keep", style: "cancel" },
+      { text: "Cancel Request", style: "destructive", onPress: () => act(() => cancelFriendRequest(me, uid), "Couldn't cancel the request.") },
+    ]);
+
+  const acceptRequest = () =>
+    me && incomingReq && act(() => acceptFriendRequest(me, incomingReq), "Couldn't accept the request.");
+
+  const openChat = () =>
+    me && uid &&
+    act(async () => {
+      const id = await openChatThread(me, { uid, displayName: name, email: profile?.email, photoURL: profile?.photoURL });
+      router.push(`/chat/${id}` as any);
+    }, "Couldn't open the chat. Please try again.");
 
   const confirmBlock = () => {
     if (!me || !uid) return;
@@ -200,23 +198,34 @@ export default function ChefProfileScreen() {
                   </>
                 )}
               </Pressable>
-            ) : (
-              <Pressable
-                style={[styles.primaryBtn, requestSent && styles.secondaryBtn]}
-                onPress={sendRequest}
-                disabled={busy || requestSent}
-              >
+            ) : incomingReq ? (
+              <Pressable style={styles.primaryBtn} onPress={acceptRequest} disabled={busy}>
                 {busy ? (
                   <ActivityIndicator color={tc("#0f1115")} />
                 ) : (
                   <>
+                    <FontAwesome name="check" size={14} color={tc("#0f1115")} />
+                    <Text style={styles.primaryText}>Accept Friend Request</Text>
+                  </>
+                )}
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[styles.primaryBtn, requestSent && styles.secondaryBtn]}
+                onPress={requestSent ? cancelRequest : sendRequest}
+                disabled={busy}
+              >
+                {busy ? (
+                  <ActivityIndicator color={requestSent ? "#f59e0b" : tc("#0f1115")} />
+                ) : (
+                  <>
                     <FontAwesome
-                      name={requestSent ? "check" : "user-plus"}
+                      name={requestSent ? "clock-o" : "user-plus"}
                       size={14}
                       color={requestSent ? "#f59e0b" : tc("#0f1115")}
                     />
                     <Text style={[styles.primaryText, requestSent && styles.secondaryText]}>
-                      {requestSent ? "Request Sent" : "Add Friend"}
+                      {requestSent ? "Requested" : "Add Friend"}
                     </Text>
                   </>
                 )}

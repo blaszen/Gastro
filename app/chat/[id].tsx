@@ -29,6 +29,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../lib/firebase"; // Adjust path to match your structure
+import { markThreadRead, shortTime } from "../../lib/social";
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
 interface Message {
@@ -108,6 +109,7 @@ export default function ChatScreen() {
 
         setMessages(list);
         setLoading(false);
+        if (currentUser) markThreadRead(threadId, currentUser.uid);
       },
       (error) => {
         console.error("Error listening to messages:", error);
@@ -139,7 +141,9 @@ export default function ChatScreen() {
         {
           participants: threadId.split("_"),
           lastMessage: trimmed.slice(0, 120),
+          lastSenderId: currentUser.uid,
           updatedAt: new Date().toISOString(),
+          lastRead: { [currentUser.uid]: new Date().toISOString() },
         },
         { merge: true }
       );
@@ -150,8 +154,12 @@ export default function ChatScreen() {
     }
   };
 
-  const renderMessageItem = ({ item }: { item: Message }) => {
+  const renderMessageItem = ({ item, index }: { item: Message; index: number }) => {
     const isMe = item.senderId === currentUser?.uid;
+    const ts = item.createdAt?.toDate ? item.createdAt.toDate().toISOString() : undefined;
+    const next = messages[index + 1];
+    // Show the time only on the last message of a run from the same sender.
+    const showTime = !!ts && (!next || next.senderId !== item.senderId);
     const isRecipe = item.type === "recipe_share" || !!item.sharedRecipeId;
 
     return (
@@ -183,12 +191,11 @@ export default function ChatScreen() {
               {item.sharedRecipeId && (
                 <Pressable
                   style={styles.viewRecipeBtn}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/recipes",
-                      params: { recipeId: item.sharedRecipeId },
-                    })
-                  }
+                  onPress={() => {
+                    const rid = String(item.sharedRecipeId);
+                    // Spoonacular ids are numeric; community recipes use Firestore ids.
+                    router.push((/^\d+$/.test(rid) ? `/spoon/${rid}` : `/recipe/${rid}`) as any);
+                  }}
                 >
                   <Text style={styles.viewRecipeBtnText}>Open Recipe</Text>
                   <FontAwesome name="chevron-right" size={10} color={tc("#0f1115")} />
@@ -209,6 +216,9 @@ export default function ChatScreen() {
             </Text>
           ) : null}
         </View>
+        {showTime ? (
+          <Text style={[styles.timeText, isMe ? { textAlign: "right" } : null]}>{shortTime(ts)}</Text>
+        ) : null}
       </View>
     );
   };
@@ -279,7 +289,7 @@ export default function ChatScreen() {
           <TextInput
             style={styles.input}
             placeholder="Type a message..."
-            placeholderTextColor="#71717a"
+            placeholderTextColor={tc("#71717a")}
             value={inputText}
             onChangeText={setInputText}
             multiline
@@ -348,15 +358,15 @@ const styles = themedStyles({
     gap: 12,
   },
   messageRow: {
-    flexDirection: "row",
     marginBottom: 4,
   },
   messageRowMe: {
-    justifyContent: "flex-end",
+    alignItems: "flex-end",
   },
   messageRowOther: {
-    justifyContent: "flex-start",
+    alignItems: "flex-start",
   },
+  timeText: { color: "#71717a", fontSize: 10, marginTop: 4, marginHorizontal: 4 },
   messageBubble: {
     maxWidth: "80%",
     borderRadius: 16,

@@ -17,6 +17,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter } from "expo-router";
 import { getAuth, updateProfile } from "firebase/auth";
+import { sendFriendRequest } from "../../lib/social";
 import {
   collection,
   doc,
@@ -136,6 +137,7 @@ export default function ProfileModal() {
         {
           uid: currentUser.uid,
           displayName: name,
+          displayNameLower: name.toLowerCase(),
           headline: draft.headline.trim().slice(0, 60),
           bio: draft.bio.trim().slice(0, 300),
           cuisines: draft.cuisines.trim().slice(0, 80),
@@ -178,6 +180,7 @@ export default function ProfileModal() {
             uid: currentUser.uid,
             email: currentUser.email.trim().toLowerCase(),
             displayName: currentUser.displayName || "Chef",
+            displayNameLower: (currentUser.displayName || "Chef").toLowerCase(),
             photoURL: photoURL,
             updatedAt: new Date().toISOString(),
           },
@@ -338,21 +341,7 @@ export default function ProfileModal() {
     if (!currentUser || !foundUser) return;
 
     try {
-      const targetReqRef = doc(
-        db,
-        "users",
-        foundUser.uid,
-        "friendRequests",
-        currentUser.uid
-      );
-
-      await setDoc(targetReqRef, {
-        fromUid: currentUser.uid,
-        fromEmail: currentUser.email || "",
-        fromName: currentUser.displayName || "Chef",
-        status: "pending",
-        createdAt: new Date().toISOString(),
-      });
+      await sendFriendRequest(currentUser, foundUser);
 
       Alert.alert("Success", `Friend request sent to ${foundUser.email}`);
       setIsSearchVisible(false);

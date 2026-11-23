@@ -1,323 +1,276 @@
 import React, { useState } from "react";
 import {
-  StyleSheet,
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Image,
   SafeAreaView,
   StatusBar,
-  FlatList,
-  Dimensions,
-  Linking,
-  Alert,
+  ActivityIndicator,
 } from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { router } from "expo-router";
+import { useRouter } from "expo-router";
 import ScreenHeader from "../../components/ScreenHeader";
+import { auth } from "../../lib/firebase";
+import { LEVELS, TOTAL_LESSONS, nextLesson, rankFor } from "../../lib/curriculum";
+import { useLessonProgress } from "../../lib/progress";
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-const CATEGORIES = ["All", "Fundamentals", "Sauces", "Classics", "Pastry"];
-
-// --- Masterclass Type Definition ---
-export interface Video {
-  id: string;
-  title: string;
-  subtitle: string;
-  thumbnail: string;
-  duration: string;
-  url: string;
-  category: "Fundamentals" | "Sauces" | "Classics" | "Pastry";
-}
-
-// --- Julia Child Masterclasses Data Array ---
-export const juliaChildMasterclasses: Video[] = [
-  // Fundamentals
-  {
-    id: "jc-1",
-    title: "Mastering the Knife & Vegetable Precision",
-    subtitle: "Mirepoix, Julienne & Chiffonade like a pro",
-    category: "Fundamentals",
-    thumbnail:
-      "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=800&q=80",
-    duration: "14:20",
-    url: "https://www.youtube.com/results?search_query=julia+child+knife+skills",
-  },
-  {
-    id: "jc-2",
-    title: "The Perfect French Omelet",
-    subtitle: "Butter temperature, pan flicking & soft curds",
-    category: "Fundamentals",
-    thumbnail:
-      "https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=800&q=80",
-    duration: "8:45",
-    url: "https://www.youtube.com/results?search_query=julia+child+french+omelette",
-  },
-  {
-    id: "jc-3",
-    title: "How to Truss & Roast a Chicken",
-    subtitle: "Crispy skin, basting, and pan sauce reduction",
-    category: "Fundamentals",
-    thumbnail:
-      "https://images.unsplash.com/photo-1598103442097-8b74394b95c6?auto=format&fit=crop&w=800&q=80",
-    duration: "18:10",
-    url: "https://www.youtube.com/results?search_query=julia+child+roast+chicken",
-  },
-
-  // Sauces
-  {
-    id: "jc-4",
-    title: "The Art of Hollandaise & Béarnaise",
-    subtitle: "Emulsification, warm whisking & restoring broken sauces",
-    category: "Sauces",
-    thumbnail:
-      "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=800&q=80",
-    duration: "12:15",
-    url: "https://www.youtube.com/results?search_query=julia+child+hollandaise",
-  },
-  {
-    id: "jc-5",
-    title: "Roux Foundations: Velouté & Béchamel",
-    subtitle: "Roux stages, simmer timing & smooth milk integration",
-    category: "Sauces",
-    thumbnail:
-      "https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=800&q=80",
-    duration: "15:30",
-    url: "https://www.youtube.com/results?search_query=julia+child+bechamel",
-  },
-
-  // Classics
-  {
-    id: "jc-6",
-    title: "Boeuf Bourguignon Step-by-Step",
-    subtitle: "Searing, deglazing, pearl onions & slow braising",
-    category: "Classics",
-    thumbnail:
-      "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=800&q=80",
-    duration: "24:50",
-    url: "https://www.youtube.com/results?search_query=julia+child+boeuf+bourguignon",
-  },
-  {
-    id: "jc-7",
-    title: "Coq au Vin & Red Wine Reductions",
-    subtitle: "Lardons, mushrooms, cognac flambé & aromatics",
-    category: "Classics",
-    thumbnail:
-      "https://images.unsplash.com/photo-1600891964599-f61ba0e24092?auto=format&fit=crop&w=800&q=80",
-    duration: "21:05",
-    url: "https://www.youtube.com/results?search_query=julia+child+coq+au+vin",
-  },
-  {
-    id: "jc-8",
-    title: "Classic French Onion Soup (Soupe à l'Oignon)",
-    subtitle: "Deep onion caramelization & Gruyère croûton lid",
-    category: "Classics",
-    thumbnail:
-      "https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=800&q=80",
-    duration: "16:40",
-    url: "https://www.youtube.com/results?search_query=julia+child+french+onion+soup",
-  },
-
-  // Pastry
-  {
-    id: "jc-9",
-    title: "Pâte Feuilletée (Puff Pastry)",
-    subtitle: "Lamination, butter blocks & turn mechanics",
-    category: "Pastry",
-    thumbnail:
-      "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80",
-    duration: "28:15",
-    url: "https://www.youtube.com/results?search_query=julia+child+puff+pastry",
-  },
-  {
-    id: "jc-10",
-    title: "Soufflé Technique & Meringue Folding",
-    subtitle: "Ramekin lining, egg white peaks & rise discipline",
-    category: "Pastry",
-    thumbnail:
-      "https://images.unsplash.com/photo-1579372786545-d24232daf58c?auto=format&fit=crop&w=800&q=80",
-    duration: "11:50",
-    url: "https://www.youtube.com/results?search_query=julia+child+souffle",
-  },
-];
-
-export default function MasterclassLibraryScreen() {
+export default function MasterclassScreen() {
   useThemeMode();
-  const [activeCategory, setActiveCategory] = useState("All");
+  const router = useRouter();
+  const { done, loading } = useLessonProgress(auth.currentUser?.uid);
+  const completed = done.size;
+  const { current, next } = rankFor(completed);
+  const upNext = nextLesson(done);
 
-  const filteredClasses =
-    activeCategory === "All"
-      ? juliaChildMasterclasses
-      : juliaChildMasterclasses.filter(
-          (item) => item.category === activeCategory
-        );
+  // Open the first level that isn't finished yet.
+  const firstOpen = LEVELS.find((l) => l.lessons.some((x) => !done.has(x.id)))?.id ?? LEVELS[0].id;
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const openId = expanded ?? firstOpen;
 
-  const handleOpenLink = async (url: string) => {
-    try {
-      await Linking.openURL(url);
-    } catch (err) {
-      Alert.alert("Error", "Could not open video stream.");
-    }
-  };
+  const pct = completed / TOTAL_LESSONS;
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={statusBarStyle()} />
+      <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
+      <ScreenHeader title="Masterclass" subtitle="From basics to chef level" />
 
-      <ScreenHeader title="Masterclasses" subtitle="The French Chef Curriculum" />
-
-      {/* Category Pills */}
-      <View style={styles.categoryContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.pill,
-                activeCategory === cat && styles.pillActive,
-              ]}
-              onPress={() => setActiveCategory(cat)}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  activeCategory === cat && styles.pillTextActive,
-                ]}
-              >
-                {cat}
+      {loading ? (
+        <ActivityIndicator color="#f59e0b" style={{ marginTop: 40 }} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Rank & progress */}
+          <View style={styles.rankCard}>
+            <View style={styles.rankTop}>
+              <View style={styles.rankBadge}>
+                <FontAwesome name="trophy" size={20} color="#f59e0b" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rankLabel}>Your rank</Text>
+                <Text style={styles.rankTitle}>{current.title}</Text>
+              </View>
+              <Text style={styles.rankCount}>
+                {completed}/{TOTAL_LESSONS}
               </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+            </View>
+            <View style={styles.track}>
+              <View style={[styles.fill, { width: `${Math.max(pct * 100, completed ? 4 : 0)}%` }]} />
+            </View>
+            <Text style={styles.rankHint}>
+              {next
+                ? `${next.min - completed} more lesson${next.min - completed === 1 ? "" : "s"} to ${next.title}`
+                : "You've reached the top rank. Chapeau, Chef!"}
+            </Text>
 
-      {/* Masterclass Grid */}
-      <FlatList
-        data={filteredClasses}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 20 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={styles.libraryCard}
-            onPress={() => handleOpenLink(item.url)}
-          >
-            <Image source={{ uri: item.thumbnail }} style={styles.cardImage} />
-            <View style={styles.cardOverlay} />
-            <View style={styles.cardBadge}>
-              <Text style={styles.badgeText}>{item.category}</Text>
-            </View>
-            <View style={styles.durationBadge}>
-              <FontAwesome
-                name="clock-o"
-                size={10}
-                color={tc("#f4f4f5")}
-                style={{ marginRight: 4 }}
-              />
-              <Text style={styles.durationText}>{item.duration}</Text>
-            </View>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-      />
+            {upNext ? (
+              <Pressable style={styles.continueBtn} onPress={() => router.push(`/lesson/${upNext.id}` as any)}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.continueLabel}>{completed ? "Continue" : "Start here"}</Text>
+                  <Text style={styles.continueTitle} numberOfLines={1}>
+                    {upNext.title}
+                  </Text>
+                </View>
+                <View style={styles.playCircle}>
+                  <FontAwesome name="play" size={12} color="#f59e0b" style={{ marginLeft: 2 }} />
+                </View>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Levels */}
+          {LEVELS.map((level) => {
+            const levelDone = level.lessons.filter((x) => done.has(x.id)).length;
+            const complete = levelDone === level.lessons.length;
+            const isOpen = openId === level.id;
+            return (
+              <View key={level.id} style={styles.levelWrap}>
+                <Pressable style={styles.levelCard} onPress={() => setExpanded(isOpen ? "" : level.id)}>
+                  <Image source={{ uri: level.image }} style={styles.levelImage} />
+                  <View style={styles.levelShade} />
+                  <View style={styles.levelShadeBottom} />
+                  <View style={styles.levelBody}>
+                    <View style={styles.levelTopRow}>
+                      <View style={styles.levelNum}>
+                        <Text style={styles.levelNumText}>LEVEL {level.number}</Text>
+                      </View>
+                      {complete ? (
+                        <View style={styles.doneChip}>
+                          <FontAwesome name="check" size={10} color="#0f1115" />
+                          <Text style={styles.doneChipText}>Complete</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={styles.levelTitle}>{level.title}</Text>
+                    <Text style={styles.levelTagline} numberOfLines={2}>
+                      {level.tagline}
+                    </Text>
+                    <View style={styles.levelFooter}>
+                      <View style={styles.levelTrack}>
+                        <View
+                          style={[styles.levelFill, { width: `${(levelDone / level.lessons.length) * 100}%` }]}
+                        />
+                      </View>
+                      <Text style={styles.levelCount}>
+                        {levelDone}/{level.lessons.length}
+                      </Text>
+                      <FontAwesome name={isOpen ? "chevron-up" : "chevron-down"} size={12} color="#ffffff" />
+                    </View>
+                  </View>
+                </Pressable>
+
+                {isOpen ? (
+                  <View style={styles.lessonList}>
+                    {level.lessons.map((lesson, i) => {
+                      const isDone = done.has(lesson.id);
+                      const isNext = upNext?.id === lesson.id;
+                      return (
+                        <Pressable
+                          key={lesson.id}
+                          style={[styles.lessonRow, isNext && styles.lessonRowNext]}
+                          onPress={() => router.push(`/lesson/${lesson.id}` as any)}
+                        >
+                          <View style={[styles.lessonDot, isDone && styles.lessonDotDone]}>
+                            {isDone ? (
+                              <FontAwesome name="check" size={11} color={tc("#0f1115")} />
+                            ) : (
+                              <Text style={styles.lessonDotText}>{i + 1}</Text>
+                            )}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.lessonTitle, isDone && styles.lessonTitleDone]} numberOfLines={1}>
+                              {lesson.title}
+                            </Text>
+                            <Text style={styles.lessonSummary} numberOfLines={1}>
+                              {lesson.summary}
+                            </Text>
+                          </View>
+                          <Text style={styles.lessonMin}>{lesson.minutes} min</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+
+          <Text style={styles.footNote}>
+            Lessons are written by the Gastro team. Each one links to video demos on YouTube if you'd like to watch
+            it done.
+          </Text>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = themedStyles({
   container: { flex: 1, backgroundColor: "#0f1115" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#27272a",
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  content: { paddingHorizontal: 20, paddingBottom: 48 },
+
+  rankCard: {
+    padding: 18,
+    borderRadius: 22,
     backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    marginBottom: 20,
+  },
+  rankTop: { flexDirection: "row", alignItems: "center", gap: 14 },
+  rankBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
   },
-  headerTitle: {
-    color: "#f4f4f5",
-    fontSize: 16,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  headerSubtitle: {
-    color: "#f59e0b",
-    fontSize: 11,
-    textAlign: "center",
-    marginTop: 2,
-  },
-  categoryContainer: { paddingVertical: 12, paddingLeft: 20 },
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: "#181b20",
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: "#27272a",
-  },
-  pillActive: { backgroundColor: "#f59e0b", borderColor: "#f59e0b" },
-  pillText: { color: "#a1a1aa", fontSize: 12, fontWeight: "600" },
-  pillTextActive: { color: "#0f1115", fontWeight: "700" },
-  libraryCard: {
-    height: 180,
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 16,
-    position: "relative",
-    borderWidth: 1,
-    borderColor: "#27272a",
-  },
-  cardImage: { width: "100%", height: "100%" },
-  cardOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(15, 17, 21, 0.65)",
-  },
-  cardBadge: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    backgroundColor: "rgba(15, 17, 21, 0.85)",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 0.5,
-    borderColor: "#f59e0b",
-  },
-  badgeText: {
-    color: "#f59e0b",
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  durationBadge: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    backgroundColor: "rgba(15, 17, 21, 0.85)",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+  rankLabel: { color: "#a1a1aa", fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 },
+  rankTitle: { color: "#f4f4f5", fontSize: 20, fontWeight: "900", marginTop: 2 },
+  rankCount: { color: "#f59e0b", fontSize: 16, fontWeight: "900" },
+  track: { height: 8, borderRadius: 4, backgroundColor: "#27272a", marginTop: 16, overflow: "hidden" },
+  fill: { height: 8, borderRadius: 4, backgroundColor: "#f59e0b" },
+  rankHint: { color: "#a1a1aa", fontSize: 13, marginTop: 8 },
+  continueBtn: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: "#f59e0b",
   },
-  durationText: { color: "#f4f4f5", fontSize: 10, fontWeight: "600" },
-  cardContent: { position: "absolute", bottom: 14, left: 14, right: 14 },
-  cardTitle: { color: "#f4f4f5", fontSize: 16, fontWeight: "700" },
-  cardSubtitle: { color: "#a1a1aa", fontSize: 12, marginTop: 4 },
+  continueLabel: { color: "#0f1115", fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 },
+  continueTitle: { color: "#0f1115", fontSize: 16, fontWeight: "900", marginTop: 2 },
+  playCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#0f1115",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  levelWrap: { marginBottom: 14 },
+  levelCard: { height: 170, borderRadius: 22, overflow: "hidden", backgroundColor: "#181b20" },
+  levelImage: { position: "absolute", width: "100%", height: "100%" },
+  levelShade: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(15,17,21,0.35)" },
+  levelShadeBottom: { position: "absolute", left: 0, right: 0, bottom: 0, height: "65%", backgroundColor: "rgba(15,17,21,0.55)" },
+  levelBody: { flex: 1, padding: 16, justifyContent: "flex-end" },
+  levelTopRow: { position: "absolute", top: 14, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" },
+  levelNum: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: "rgba(15,17,21,0.7)",
+  },
+  levelNumText: { color: "#f59e0b", fontSize: 11, fontWeight: "900", letterSpacing: 1 },
+  doneChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: "#f59e0b",
+  },
+  doneChipText: { color: "#0f1115", fontSize: 11, fontWeight: "900" },
+  levelTitle: { color: "#ffffff", fontSize: 24, fontWeight: "900" },
+  levelTagline: { color: "rgba(255,255,255,0.8)", fontSize: 13, marginTop: 2 },
+  levelFooter: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  levelTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.25)", overflow: "hidden" },
+  levelFill: { height: 5, borderRadius: 3, backgroundColor: "#f59e0b" },
+  levelCount: { color: "#ffffff", fontSize: 12, fontWeight: "800" },
+
+  lessonList: { marginTop: 8, gap: 8 },
+  lessonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: "#181b20",
+    borderWidth: 1,
+    borderColor: "#27272a",
+  },
+  lessonRowNext: { borderColor: "rgba(245, 158, 11, 0.55)" },
+  lessonDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    borderColor: "#3f3f46",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lessonDotDone: { backgroundColor: "#f59e0b", borderColor: "#f59e0b" },
+  lessonDotText: { color: "#a1a1aa", fontSize: 12, fontWeight: "800" },
+  lessonTitle: { color: "#f4f4f5", fontSize: 15, fontWeight: "700" },
+  lessonTitleDone: { color: "#a1a1aa" },
+  lessonSummary: { color: "#71717a", fontSize: 12, marginTop: 2 },
+  lessonMin: { color: "#71717a", fontSize: 12, fontWeight: "600" },
+
+  footNote: { color: "#71717a", fontSize: 12, textAlign: "center", marginTop: 12, lineHeight: 18 },
 });
