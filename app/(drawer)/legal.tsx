@@ -12,7 +12,7 @@ const UPDATED = "November 22, 2026";
 const PRIVACY: { h: string; p: string }[] = [
   {
     h: "What we collect",
-    p: "Your email address and password (handled by Firebase Authentication), the display name and profile details you choose to add, your profile photo, the recipes, photos, grocery and prep lists you create, your favorites, friend connections and chat messages.",
+    p: "Your email address and password (handled by Firebase Authentication), the display name and profile details you choose to add, your profile photo, the recipes, photos, grocery and prep lists you create, your favorites, friend connections, chat messages and Masterclass lesson progress.",
   },
   {
     h: "How we use it",
@@ -28,7 +28,7 @@ const PRIVACY: { h: string; p: string }[] = [
   },
   {
     h: "Deleting your data",
-    p: "You can delete your account at any time in Settings → Delete Account. This removes your profile, recipes, lists, favorites, friend connections and uploaded photos. Messages you sent in shared chats may remain visible to the other person.",
+    p: "You can delete your account at any time in Settings → Delete Account. This removes your profile, recipes, lists, favorites, friend connections, lesson progress and uploaded photos. Messages you sent in shared chats may remain visible to the other person.",
   },
   {
     h: "Contact",
@@ -47,7 +47,7 @@ const TERMS: { h: string; p: string }[] = [
   },
   {
     h: "Community rules",
-    p: "Don't post anything illegal, hateful, harassing, sexually explicit, or that infringes someone else's rights. We may remove content or suspend accounts that break these rules. Report problems to us by email.",
+    p: "GASTRO has zero tolerance for objectionable content or abusive users. Don't post or send anything illegal, hateful, harassing, sexually explicit, or that infringes someone else's rights. You can report any recipe and block any chef from inside the app. We review reports within 24 hours, remove offending content and suspend accounts that break these rules.",
   },
   {
     h: "Recipes and safety",
