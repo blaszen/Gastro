@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "expo-router";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { getAuth } from "firebase/auth";
 import { useNotificationBadge } from "../../lib/notifications";
+import { useUnreadChatCount, useIncomingRequests } from "../../lib/social";
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../lib/theme";
 
 // Daily Tips & Chef Wisdom Collection
@@ -78,6 +79,8 @@ function CustomDrawerContent(props: any) {
   const currentWisdom = CHEF_WISDOM[tipIndex];
 
   const unreadCount = useNotificationBadge(currentUser?.uid);
+  const unreadChats = useUnreadChatCount(currentUser?.uid);
+  const friendRequests = useIncomingRequests(currentUser?.uid).length;
 
   const menuItems = [
     {
@@ -94,7 +97,7 @@ function CustomDrawerContent(props: any) {
       label: "Messages",
       icon: "comments",
       path: "/messages",
-      badge: 0,
+      badge: unreadChats + friendRequests,
       action: () => {
         props.navigation.closeDrawer();
         router.push("/messages" as any);

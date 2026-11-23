@@ -12,6 +12,7 @@ import { View, Text, StyleSheet, Animated } from "react-native";
 import { AppThemeProvider, useThemeMode, tc, themedStyles } from "../lib/theme";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../lib/firebase";
+import { syncPublicProfile } from "../lib/social";
 import { useUserStore } from "../store/userStore";
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import "@/global.css";
@@ -67,6 +68,8 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
     // 2. Firebase Auth Listener
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
+      // Keep the public profile searchable (name, lowercase name, photo).
+      if (u) syncPublicProfile(u);
 
       // Hide native splash screen once fonts & auth state check complete
       if (fontsLoaded) {
