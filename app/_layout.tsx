@@ -98,6 +98,7 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
             {/* Main navigation */}
             <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
             <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="lesson/[id]" options={{ headerShown: false }} />
             {/* Auth screens */}
             <Stack.Screen name="auth/login" />
             <Stack.Screen name="auth/register" />
