@@ -8,8 +8,8 @@ import { useFonts } from "expo-font";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useRef } from "react";
-import { View, Text, StyleSheet, Animated } from "react-native";
-import { AppThemeProvider, useThemeMode, tc, themedStyles } from "../lib/theme";
+import { View, Text, StyleSheet, Animated, Image } from "react-native";
+import { AppThemeProvider, useThemeMode, tc } from "../lib/theme";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { syncPublicProfile } from "../lib/social";
@@ -46,21 +46,23 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   // Custom GASTRO Splash Animation State
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current; // wordmark
+  const scaleAnim = useRef(new Animated.Value(14)).current; // wordmark slide (px)
+  const overlayAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     // 1. Trigger splash intro animation when component mounts
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 450,
+        delay: 120,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 7,
-        tension: 40,
+        toValue: 0,
+        friction: 8,
+        tension: 50,
         useNativeDriver: true,
       }),
     ]).start();
@@ -78,13 +80,18 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
 
       // Small delay to allow the custom brand animation to shine
       setTimeout(() => {
-        setIsAuthReady(true);
         if (!u) {
           router.replace("/auth/login");
         } else {
           router.replace("/(drawer)");
         }
-      }, 700);
+        // Fade the brand overlay out over the first screen.
+        Animated.timing(overlayAnim, {
+          toValue: 0,
+          duration: 280,
+          useNativeDriver: true,
+        }).start(() => setIsAuthReady(true));
+      }, 750);
     });
 
     return unsub;
@@ -110,25 +117,19 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
 
           {/* GASTRO Branded Loading / Splash Overlay */}
           {!isAuthReady && (
-            <View style={styles.splashOverlay}>
+            <Animated.View style={[splash.overlay, { opacity: overlayAnim }]} pointerEvents="none">
+              {/* Same image, size and position as the native splash, so the hand-off is seamless */}
+              <Image source={require("../assets/images/splash-icon.png")} style={splash.mark} />
               <Animated.View
                 style={[
-                  styles.brandContainer,
-                  {
-                    opacity: fadeAnim,
-                    transform: [{ scale: scaleAnim }],
-                  },
+                  splash.wordmark,
+                  { opacity: fadeAnim, transform: [{ translateY: scaleAnim }] },
                 ]}
               >
-                <View style={styles.iconCircle}>
-                  <FontAwesome name="cutlery" size={28} color="#f59e0b" />
-                </View>
-                <Text style={styles.brandTitle}>GASTRO</Text>
-                <Text style={styles.brandSubtitle}>
-                  KITCHEN OPERATING SYSTEM
-                </Text>
+                <Text style={splash.title}>GASTRO</Text>
+                <Text style={splash.subtitle}>COOK · SHARE · LEARN</Text>
               </Animated.View>
-            </View>
+            </Animated.View>
           )}
         </View>
       </ThemeProvider>
@@ -136,44 +137,17 @@ function RootNav({ fontsLoaded }: { fontsLoaded: boolean }) {
   );
 }
 
-const styles = themedStyles({
-  splashOverlay: {
+// Not themed: the launch screen is always dark, like the native splash.
+const splash = StyleSheet.create({
+  overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#0f1115",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 99999,
   },
-  brandContainer: {
-    alignItems: "center",
-  },
-  iconCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "#181b20",
-    borderWidth: 1,
-    borderColor: "#f59e0b",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-    shadowColor: "#f59e0b",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  brandTitle: {
-    color: "#f4f4f5",
-    fontSize: 28,
-    fontWeight: "900",
-    letterSpacing: 5,
-  },
-  brandSubtitle: {
-    color: "#f59e0b",
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 2.5,
-    marginTop: 6,
-  },
+  mark: { width: 200, height: 200 },
+  wordmark: { position: "absolute", top: "50%", marginTop: 92, alignItems: "center" },
+  title: { color: "#f4f4f5", fontSize: 26, fontWeight: "900", letterSpacing: 6 },
+  subtitle: { color: "#f59e0b", fontSize: 10, fontWeight: "700", letterSpacing: 3, marginTop: 6 },
 });

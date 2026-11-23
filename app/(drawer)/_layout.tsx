@@ -144,6 +144,26 @@ function CustomDrawerContent(props: any) {
       },
     },
     {
+      label: "Masterclass",
+      icon: "graduation-cap",
+      path: "/masterclassLibrary",
+      badge: 0,
+      action: () => {
+        props.navigation.closeDrawer();
+        router.push("/masterclassLibrary" as any);
+      },
+    },
+    {
+      label: "Culinary Services",
+      icon: "handshake-o",
+      path: "/services",
+      badge: 0,
+      action: () => {
+        props.navigation.closeDrawer();
+        router.push("/services" as any);
+      },
+    },
+    {
       label: "Prep & Grocery",
       icon: "shopping-basket",
       path: "/grocery",
@@ -305,6 +325,8 @@ export default function DrawerLayout() {
       <Drawer.Screen name="recipes" options={{ title: "Recipes" }} />
       <Drawer.Screen name="community" options={{ title: "Community Feed" }} />
       <Drawer.Screen name="grocery" options={{ title: "Grocery" }} />
+      <Drawer.Screen name="masterclassLibrary" options={{ title: "Masterclass" }} />
+      <Drawer.Screen name="services" options={{ title: "Culinary Services" }} />
       <Drawer.Screen name="settings" options={{ title: "Settings" }} />
       <Drawer.Screen name="about" options={{ title: "About" }} />
       <Drawer.Screen name="legal" options={{ title: "Legal" }} />

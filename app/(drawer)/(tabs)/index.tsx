@@ -31,6 +31,7 @@ import { fetchUserFavorites, toggleFavoriteRecipe } from "../../../lib/favorites
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../lib/theme";
 import { LEVELS, Level } from "../../../lib/curriculum";
 import { useLessonProgress } from "../../../lib/progress";
+import { CATEGORIES } from "../../../lib/partners";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -83,35 +84,7 @@ interface Service {
 
 
 
-const services: Service[] = [
-  {
-    id: "1",
-    title: "Private Dining & Tasting Menus",
-    subtitle: "Custom multi-course plated experiences",
-    image:
-      "https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=1000&q=80",
-    icon: "cutlery",
-    url: "https://www.google.com/maps/search/private+chef+dining",
-  },
-  {
-    id: "2",
-    title: "Artisanal Meal Solutions",
-    subtitle: "Chef-designed macronutrient balance delivered",
-    image:
-      "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=1000&q=80",
-    icon: "leaf",
-    url: "https://www.google.com/maps/search/meal+prep+delivery",
-  },
-  {
-    id: "3",
-    title: "Bespoke Event Catering",
-    subtitle: "Elevated craft dining & signature cocktail bars",
-    image:
-      "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1000&q=80",
-    icon: "glass",
-    url: "https://www.google.com/maps/search/catering+services",
-  },
-];
+
 
 export default function TabOneScreen() {
   useThemeMode();
@@ -367,11 +340,11 @@ export default function TabOneScreen() {
     );
   };
 
-  const renderServiceCard = ({ item }: { item: Service }) => (
+  const renderServiceCard = ({ item }: { item: (typeof CATEGORIES)[number] }) => (
     <TouchableOpacity
       activeOpacity={0.9}
       style={[styles.serviceCard, { width: SERVICE_CARD_WIDTH }]}
-      onPress={() => handleOpenLink(item.url)}
+      onPress={() => router.push({ pathname: "/services", params: { category: item.key } } as never)}
     >
       <Image
         source={{ uri: item.image }}
@@ -381,7 +354,7 @@ export default function TabOneScreen() {
       <View style={styles.darkGradient} />
 
       <View style={styles.serviceIconContainer}>
-        <FontAwesome name={item.icon} size={13} color="#f59e0b" />
+        <FontAwesome name={item.icon as any} size={13} color="#f59e0b" />
       </View>
 
       <View style={styles.serviceContent}>
@@ -389,7 +362,7 @@ export default function TabOneScreen() {
         <Text style={styles.serviceSubtitle}>{item.subtitle}</Text>
 
         <View style={styles.serviceCta}>
-          <Text style={styles.serviceCtaText}>Explore Craft Services</Text>
+          <Text style={styles.serviceCtaText}>See local partners</Text>
           <FontAwesome name="arrow-right" size={10} color="#f59e0b" />
         </View>
       </View>
@@ -718,13 +691,16 @@ export default function TabOneScreen() {
             <View style={styles.amberAccentBar} />
             <Text style={styles.sectionTitle}>Culinary Services</Text>
           </View>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/services" as never)}>
+            <Text style={styles.seeAllText}>View All</Text>
+          </TouchableOpacity>
         </View>
 
         <FlatList
-          data={services}
+          data={CATEGORIES}
           horizontal
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.key}
           renderItem={renderServiceCard}
           contentContainerStyle={styles.listContainer}
         />
