@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentCreated, onDocumentDeleted } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
@@ -115,4 +116,33 @@ export const spoonacularRecipe = onCall(
     if (!/^\d+$/.test(id)) throw new HttpsError("invalid-argument", "Bad id.");
     return callSpoonacular(`/recipes/${id}/information`, new URLSearchParams());
   }
+);
+
+// ---------------------------------------------------------------------------
+// Favorite counts
+// Keeps recipes/{id}.favoriteCount in step with users/{uid}/favorites/{id} so
+// the app can rank trending recipes and featured chefs. Spoonacular favourites
+// (numeric ids) have no recipe doc and are skipped.
+// ---------------------------------------------------------------------------
+async function bumpFavoriteCount(recipeId: string, delta: number) {
+  if (!/^[A-Za-z0-9]{15,}$/.test(recipeId)) return;
+  const ref = db.collection("recipes").doc(recipeId);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const current = Number(snap.get("favoriteCount")) || 0;
+      tx.update(ref, { favoriteCount: Math.max(0, current + delta) });
+    });
+  } catch (err) {
+    logger.warn("favoriteCount update failed", { recipeId, delta, err: String(err) });
+  }
+}
+
+export const onFavoriteAdded = onDocumentCreated("users/{uid}/favorites/{recipeId}", (event) =>
+  bumpFavoriteCount(event.params.recipeId, 1)
+);
+
+export const onFavoriteRemoved = onDocumentDeleted("users/{uid}/favorites/{recipeId}", (event) =>
+  bumpFavoriteCount(event.params.recipeId, -1)
 );

@@ -19,6 +19,9 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useFocusEffect } from "@react-navigation/native";
 import { fetchUserFavorites, toggleFavoriteRecipe } from "../../../lib/favorites";
 import { getRecipeInformation } from "../../../lib/spoonacular";
+import { useRouter } from "expo-router";
+import TabHeader from "../../../components/TabHeader";
+import RecipeImage from "../../../components/RecipeImage";
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../lib/theme";
 
 interface ExtendedIngredient {
@@ -55,6 +58,7 @@ interface Recipe {
 
 export default function FavoritesScreen() {
   useThemeMode();
+  const router = useRouter();
   const [favorites, setFavorites] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -116,28 +120,11 @@ export default function FavoritesScreen() {
     }
   };
 
-  // Handle viewing recipe details via Modal Card
-  const handleViewRecipe = async (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
-    setRecipeModalVisible(true);
-    setLoadingDetails(true);
-
-    const targetId = recipe.recipeId || recipe.id;
-
-    if (targetId) {
-      const fullDetails = await getRecipeInformation(targetId);
-      if (fullDetails) {
-        setSelectedRecipe((prev) => ({
-          ...prev,
-          ...fullDetails,
-          // Preserve fallback fields if missing
-          title: fullDetails.title || prev?.title,
-          image: fullDetails.image || prev?.image,
-        }));
-      }
-    }
-
-    setLoadingDetails(false);
+  // Community recipes have Firestore ids; web (Spoonacular) recipes are numeric.
+  const handleViewRecipe = (recipe: Recipe) => {
+    const targetId = String(recipe.recipeId || recipe.id || "");
+    if (!targetId) return;
+    router.push((/^\d+$/.test(targetId) ? `/spoon/${targetId}` : `/recipe/${targetId}`) as any);
   };
 
   const handleOpenExternalLink = async (url?: string | null) => {
@@ -157,14 +144,11 @@ export default function FavoritesScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle={statusBarStyle()} backgroundColor={tc("#0f1115")} />
 
-      {/* HEADER */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <View style={styles.amberAccentBar} />
-          <Text style={styles.headerTitle}>Saved Creations</Text>
-        </View>
-        <Text style={styles.badgeCount}>{favorites.length} Saved</Text>
-      </View>
+      <TabHeader
+        title="Favorites"
+        subtitle={loading ? "Your saved recipes" : `${favorites.length} saved recipe${favorites.length === 1 ? "" : "s"}`}
+        action={{ icon: "search", label: "Discover recipes", onPress: () => router.push("/(drawer)/(tabs)/two" as any) }}
+      />
 
       <ScrollView
         style={styles.container}
@@ -231,15 +215,7 @@ export default function FavoritesScreen() {
                   onPress={() => handleViewRecipe(recipe)}
                 >
                   <View style={styles.imageWrapper}>
-                    {displayImage ? (
-                      <Image source={{ uri: displayImage }} style={styles.image} />
-                    ) : (
-                      <View style={styles.placeholderBanner}>
-                        <View style={styles.iconCircle}>
-                          <MaterialCommunityIcons name="chef-hat" size={26} color="#f59e0b" />
-                        </View>
-                      </View>
-                    )}
+                    <RecipeImage uri={displayImage} style={StyleSheet.absoluteFillObject} iconSize={22} />
 
                     {/* Remove Favorite Button */}
                     <Pressable

@@ -626,10 +626,10 @@ export default function ProfileModal() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Find a Chef</Text>
-              <Pressable onPress={() => setIsSearchVisible(false)}>
+              <Pressable onPress={() => setIsSearchVisible(false)} hitSlop={10} accessibilityLabel="Close">
                 <FontAwesome name="times" size={18} color={tc("#a1a1aa")} />
               </Pressable>
+              <Text style={styles.modalTitle}>Find a Chef</Text>
             </View>
 
             <Text style={styles.modalSubtitle}>
@@ -686,10 +686,10 @@ export default function ProfileModal() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
-              <Pressable onPress={() => setEditVisible(false)} hitSlop={10}>
+              <Pressable onPress={() => setEditVisible(false)} hitSlop={10} accessibilityLabel="Close">
                 <FontAwesome name="times" size={18} color={tc("#a1a1aa")} />
               </Pressable>
+              <Text style={styles.modalTitle}>Edit Profile</Text>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }}>
               {([

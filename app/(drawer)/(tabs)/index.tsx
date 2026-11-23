@@ -21,6 +21,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { auth, db } from "../../../lib/firebase";
 import { collection, limit, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import RecipeImage from "../../../components/RecipeImage";
+import TabHeader from "../../../components/TabHeader";
 import { useNotificationBadge } from "../../../lib/notifications";
 import { useBlockedIds } from "../../../lib/moderation";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
@@ -432,48 +433,16 @@ export default function TabOneScreen() {
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-            style={styles.leftHeader}
-          >
-            <View style={styles.avatarBorder}>
-              {currentUser?.photoURL?.startsWith("http") ? (
-                <Image style={styles.avatar} source={{ uri: currentUser.photoURL }} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback]}>
-                  <Text style={styles.avatarInitial}>{greetingName.charAt(0).toUpperCase()}</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.greeting}>{greeting}</Text>
-              <Text
-                style={styles.username}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {greetingName}
-              </Text>
-            </View>
-          </Pressable>
-
-          <Pressable
-            style={styles.iconButton}
-            onPress={() => router.push("/notifications" as any)}
-            accessibilityLabel="Notifications"
-          >
-            <FontAwesome name="bell-o" size={15} color={tc("#f4f4f5")} />
-            {notificationCount > 0 && (
-              <View style={styles.bellBadge}>
-                <Text style={styles.bellBadgeText}>
-                  {notificationCount > 9 ? "9+" : notificationCount}
-                </Text>
-              </View>
-            )}
-          </Pressable>
-        </View>
+        <TabHeader
+          title={greeting}
+          subtitle={greetingName}
+          action={{
+            icon: "bell-o",
+            label: "Notifications",
+            badge: notificationCount,
+            onPress: () => router.push("/notifications" as any),
+          }}
+        />
 
         {/* In-App Recipe Detail Modal */}
         <Modal visible={recipeModalVisible} animationType="slide" transparent={false}>
@@ -826,7 +795,7 @@ const styles = themedStyles({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 16,
   },
@@ -878,7 +847,7 @@ const styles = themedStyles({
   utilityGrid: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     marginBottom: 16,
   },
   utilityCard: {
@@ -914,7 +883,7 @@ const styles = themedStyles({
     alignItems: "center",
     backgroundColor: "#181a20",
     borderRadius: 12,
-    marginHorizontal: 16,
+    marginHorizontal: 20,
     paddingHorizontal: 12,
     height: 44,
     borderWidth: 1,
@@ -946,7 +915,7 @@ const styles = themedStyles({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     marginBottom: 12,
   },
   titleRow: {
@@ -976,7 +945,7 @@ const styles = themedStyles({
     fontSize: 12,
   },
   listContainer: {
-    paddingLeft: 16,
+    paddingLeft: 20,
     paddingRight: 8,
   },
   card: {
@@ -1220,7 +1189,7 @@ const styles = themedStyles({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#27272a",
