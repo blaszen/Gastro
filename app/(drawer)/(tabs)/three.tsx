@@ -23,6 +23,7 @@ import * as ImagePicker from "expo-image-picker";
 import { uploadImageAsync } from "../../../lib/uploadImage";
 import TabHeader from "../../../components/TabHeader";
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../lib/theme";
+import { generateRecipe, stepsToText, PROMPT_IDEAS } from "../../../lib/aiRecipe";
 
 export default function TabThreeScreen() {
   useThemeMode();
@@ -40,6 +41,41 @@ export default function TabThreeScreen() {
   const [isPublic, setIsPublic] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingRecipe, setLoadingRecipe] = useState(false);
+  // AI recipe generator
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiGenerated, setAiGenerated] = useState(false);
+  const [aiRemaining, setAiRemaining] = useState<number | null>(null);
+
+  const runGenerator = async () => {
+    const p = aiPrompt.trim();
+    if (p.length < 3 || aiLoading) return;
+    const hasContent = title.trim() || ingredients.trim() || instructions.trim();
+    const go = async () => {
+      setAiLoading(true);
+      try {
+        const r = await generateRecipe(p);
+        setTitle(r.title);
+        setIngredients(r.ingredients.join("\n"));
+        setInstructions(stepsToText(r.instructions));
+        setPrepTime(r.prepTimeMinutes ? String(r.prepTimeMinutes) : "");
+        setServings(r.servings ? String(r.servings) : "");
+        setAiGenerated(true);
+        setAiRemaining(r.remaining);
+        Alert.alert("Recipe ready ✨", "Review and tweak it below, add a photo, then save it to My Recipes.");
+      } catch (err: any) {
+        Alert.alert("Couldn't generate", err?.message || "Please try again.");
+      } finally {
+        setAiLoading(false);
+      }
+    };
+    if (hasContent) {
+      Alert.alert("Replace your draft?", "The generated recipe will replace what's in the form.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Replace", onPress: go },
+      ]);
+    } else go();
+  };
 
   // Load the recipe being edited
   useEffect(() => {
@@ -160,6 +196,7 @@ export default function TabThreeScreen() {
       prepTimeMinutes: prepMinutes,
       servings: servingCount,
       isPublic: Boolean(isPublic),
+      ...(aiGenerated ? { aiGenerated: true } : {}),
       userId: user.uid,
       createdBy: user.displayName || user.email?.split("@")[0] || "Chef",
       updatedAt: serverTimestamp(),
@@ -198,6 +235,8 @@ export default function TabThreeScreen() {
   };
 
   const resetForm = () => {
+    setAiGenerated(false);
+    setAiPrompt("");
     setTitle("");
     setIngredients("");
     setInstructions("");
@@ -233,6 +272,59 @@ export default function TabThreeScreen() {
 
             {loadingRecipe ? (
               <ActivityIndicator color="#f59e0b" style={{ marginVertical: 24 }} />
+            ) : null}
+
+            {/* AI generator */}
+            {!isEditing ? (
+              <View style={styles.aiCard}>
+                <View style={styles.aiHead}>
+                  <View style={styles.aiIcon}>
+                    <MaterialCommunityIcons name="creation" size={18} color="#f59e0b" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.aiTitle}>Generate with AI</Text>
+                    <Text style={styles.aiSub}>
+                      Describe a dish, a diet or what's in your fridge
+                      {aiRemaining !== null ? ` · ${aiRemaining} left today` : ""}
+                    </Text>
+                  </View>
+                </View>
+                <TextInput
+                  style={styles.aiInput}
+                  placeholder="e.g. Spicy salmon tacos for 2, under 30 minutes"
+                  placeholderTextColor={tc("#71717a")}
+                  value={aiPrompt}
+                  onChangeText={setAiPrompt}
+                  multiline
+                  maxLength={600}
+                  editable={!aiLoading}
+                />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.aiChips}>
+                  {PROMPT_IDEAS.map((idea) => (
+                    <Pressable key={idea} style={styles.aiChip} onPress={() => setAiPrompt(idea)} disabled={aiLoading}>
+                      <Text style={styles.aiChipText}>{idea}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <Pressable
+                  style={[styles.aiButton, (aiPrompt.trim().length < 3 || aiLoading) && styles.aiButtonDisabled]}
+                  onPress={runGenerator}
+                  disabled={aiPrompt.trim().length < 3 || aiLoading}
+                >
+                  {aiLoading ? (
+                    <>
+                      <ActivityIndicator color={tc("#0f1115")} />
+                      <Text style={styles.aiButtonText}>Cooking up your recipe…</Text>
+                    </>
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="creation" size={16} color={tc("#0f1115")} />
+                      <Text style={styles.aiButtonText}>Generate Recipe</Text>
+                    </>
+                  )}
+                </Pressable>
+                <Text style={styles.aiNote}>AI can make mistakes. Check ingredients, allergens and cooking temperatures.</Text>
+              </View>
             ) : null}
 
             {/* Cover Image Picker */}
@@ -494,6 +586,59 @@ const styles = themedStyles({
   },
 
   // Cover Image Card
+  aiCard: {
+    backgroundColor: "#181b20",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.35)",
+    padding: 16,
+    marginBottom: 16,
+  },
+  aiHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
+  aiIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiTitle: { color: "#f4f4f5", fontSize: 16, fontWeight: "800" },
+  aiSub: { color: "#a1a1aa", fontSize: 12, marginTop: 2 },
+  aiInput: {
+    backgroundColor: "#0f1115",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 64,
+    color: "#f4f4f5",
+    fontSize: 15,
+    textAlignVertical: "top",
+  },
+  aiChips: { gap: 8, paddingVertical: 10 },
+  aiChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#27272a",
+    backgroundColor: "#0f1115",
+  },
+  aiChipText: { color: "#a1a1aa", fontSize: 12, fontWeight: "600" },
+  aiButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#f59e0b",
+  },
+  aiButtonDisabled: { opacity: 0.5 },
+  aiButtonText: { color: "#0f1115", fontSize: 15, fontWeight: "800" },
+  aiNote: { color: "#71717a", fontSize: 11, textAlign: "center", marginTop: 10 },
   imageCard: {
     height: 110,
     borderRadius: 14,
