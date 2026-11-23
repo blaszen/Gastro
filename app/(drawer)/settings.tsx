@@ -187,7 +187,7 @@ export default function SettingsScreen() {
     danger?: boolean;
   }) => (
     <Pressable
-      style={({ pressed }) => [styles.row, pressed && onPress && styles.pressed]}
+      style={styles.row}
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}

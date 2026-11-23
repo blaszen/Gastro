@@ -180,7 +180,7 @@ function CustomDrawerContent(props: any) {
 
         {/* Profile Header */}
         <Pressable
-          style={({ pressed }) => [styles.profileRow, pressed && { opacity: 0.8 }]}
+          style={styles.profileRow}
           onPress={() => {
             props.navigation.closeDrawer();
             router.push("/profile" as any);
@@ -220,11 +220,7 @@ function CustomDrawerContent(props: any) {
             return (
               <Pressable
                 key={index}
-                style={({ pressed }) => [
-                  styles.navItem,
-                  isActive && styles.navItemActive,
-                  pressed && styles.navItemPressed,
-                ]}
+                style={[styles.navItem, isActive && styles.navItemActive]}
                 onPress={item.action}
               >
                 <View style={styles.navRow}>

@@ -33,7 +33,7 @@ export default function ScreenHeader({ title, subtitle, variant = "back", onBack
         hitSlop={10}
         accessibilityRole="button"
         accessibilityLabel={variant === "close" ? "Close" : "Go back"}
-        style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+        style={styles.backBtn}
       >
         <Ionicons
           name={variant === "close" ? "close" : "chevron-back"}
