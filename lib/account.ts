@@ -26,7 +26,7 @@ async function deleteAll(paths: { id: string; ref: any }[]) {
  * left in place.
  */
 export async function deleteUserData(uid: string) {
-  const [recipes, grocery, favorites, requests, friends, prepLists, blocked] = await Promise.all([
+  const [recipes, grocery, favorites, requests, friends, prepLists, blocked, sent, progress] = await Promise.all([
     getDocs(query(collection(db, "recipes"), where("userId", "==", uid))),
     getDocs(query(collection(db, "groceryItems"), where("createdBy", "==", uid))),
     getDocs(collection(db, "users", uid, "favorites")),
@@ -34,7 +34,14 @@ export async function deleteUserData(uid: string) {
     getDocs(collection(db, "users", uid, "friends")),
     getDocs(collection(db, "users", uid, "prepLists")),
     getDocs(collection(db, "users", uid, "blocked")),
+    getDocs(collection(db, "users", uid, "sentRequests")),
+    getDocs(collection(db, "users", uid, "progress")),
   ]);
+
+  // Withdraw any pending requests I sent.
+  await Promise.all(
+    sent.docs.map((s) => deleteDoc(doc(db, "users", s.id, "friendRequests", uid)).catch(() => {}))
+  );
 
   // Remove me from each friend's list, then my own copies.
   await Promise.all(
@@ -49,6 +56,8 @@ export async function deleteUserData(uid: string) {
     ...friends.docs,
     ...prepLists.docs,
     ...blocked.docs,
+    ...sent.docs,
+    ...progress.docs,
   ]);
 
   // Uploaded photos (best effort).

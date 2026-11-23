@@ -141,7 +141,7 @@ export default function ShareRecipeModal({
       await setDoc(
         threadRef,
         {
-          participants: [currentUser.uid, friend.uid],
+          participants: [currentUser.uid, friend.uid].sort(),
           participantData: {
             [currentUser.uid]: {
               displayName: currentUser.displayName || "Chef",
@@ -155,6 +155,7 @@ export default function ShareRecipeModal({
             },
           },
           lastMessage: `Shared recipe: ${recipe.title}`,
+          lastSenderId: currentUser.uid,
           updatedAt: new Date().toISOString(),
         },
         { merge: true }

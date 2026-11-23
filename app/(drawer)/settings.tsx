@@ -98,7 +98,7 @@ export default function SettingsScreen() {
       await updateProfile(user, { displayName: name });
       await setDoc(
         doc(db, "users", user.uid),
-        { uid: user.uid, displayName: name, updatedAt: new Date().toISOString() },
+        { uid: user.uid, displayName: name, displayNameLower: name.toLowerCase(), updatedAt: new Date().toISOString() },
         { merge: true }
       );
       setNameModal(false);

@@ -29,6 +29,8 @@ import { searchRecipes, getRecipeInformation } from "../../../lib/spoonacular";
 import { router } from "expo-router";
 import { fetchUserFavorites, toggleFavoriteRecipe } from "../../../lib/favorites";
 import { themedStyles, tc, statusBarStyle, useThemeMode } from "../../../lib/theme";
+import { LEVELS, Level } from "../../../lib/curriculum";
+import { useLessonProgress } from "../../../lib/progress";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -79,32 +81,7 @@ interface Service {
   url: string;
 }
 
-const cookingVideos: Video[] = [
-  {
-    id: "1",
-    title: "Mastering Knife Skills & Precise Prep",
-    thumbnail:
-      "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=800&q=80",
-    duration: "3:45",
-    url: "https://www.youtube.com/watch?v=dCGS067s0zo",
-  },
-  {
-    id: "2",
-    title: "Classic Sauces & Emulsions",
-    thumbnail:
-      "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=800&q=80",
-    duration: "5:10",
-    url: "https://www.youtube.com/watch?v=PUP7U5vTMM0",
-  },
-  {
-    id: "3",
-    title: "Artisanal Dough & Fermentation",
-    thumbnail:
-      "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=80",
-    duration: "12:30",
-    url: "https://www.youtube.com/watch?v=sv3TXMSv6Lw",
-  },
-];
+
 
 const services: Service[] = [
   {
@@ -216,6 +193,7 @@ export default function TabOneScreen() {
   const [communityRecipes, setCommunityRecipes] = useState<any[]>([]);
   const notificationCount = useNotificationBadge(auth.currentUser?.uid);
   const blockedIds = useBlockedIds(auth.currentUser?.uid);
+  const { done: lessonsDone } = useLessonProgress(auth.currentUser?.uid);
 
   useEffect(() => {
     const q = query(
@@ -363,38 +341,31 @@ export default function TabOneScreen() {
     );
   };
 
-  const renderVideoCard = ({ item }: { item: Video }) => (
-    <TouchableOpacity
-      activeOpacity={0.88}
-      style={[styles.card, { width: CARD_WIDTH }]}
-      onPress={() => handleOpenLink(item.url)}
-    >
-      <View style={styles.imageWrapper}>
-        <Image
-          source={{ uri: item.thumbnail }}
-          style={styles.cardImage}
-          resizeMode="cover"
-        />
-        <View style={styles.playOverlay}>
-          <FontAwesome
-            name="play"
-            size={12}
-            color={tc("#0f1115")}
-            style={{ marginLeft: 2 }}
-          />
+  const renderLevelCard = ({ item }: { item: Level }) => {
+    const levelDone = item.lessons.filter((x) => lessonsDone.has(x.id)).length;
+    return (
+      <TouchableOpacity
+        activeOpacity={0.88}
+        style={[styles.card, { width: CARD_WIDTH }]}
+        onPress={() => router.push("/masterclassLibrary" as never)}
+      >
+        <View style={styles.imageWrapper}>
+          <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
+          <View style={styles.durationBadge}>
+            <Text style={styles.durationText}>LEVEL {item.number}</Text>
+          </View>
         </View>
-        <View style={styles.durationBadge}>
-          <Text style={styles.durationText}>{item.duration}</Text>
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={styles.subText}>
+            {levelDone ? `${levelDone}/${item.lessons.length} lessons done` : `${item.lessons.length} lessons`}
+          </Text>
         </View>
-      </View>
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle} numberOfLines={1}>
-          {item.title}
-        </Text>
-        <Text style={styles.subText}>Watch Masterclass</Text>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderServiceCard = ({ item }: { item: Service }) => (
     <TouchableOpacity
@@ -722,7 +693,7 @@ export default function TabOneScreen() {
         <View style={styles.sectionHeader}>
           <View style={styles.titleRow}>
             <View style={styles.amberAccentBar} />
-            <Text style={styles.sectionTitle}>Techniques & Masterclasses</Text>
+            <Text style={styles.sectionTitle}>Masterclass: Basics to Chef</Text>
           </View>
           <TouchableOpacity
             activeOpacity={0.7}
@@ -733,11 +704,11 @@ export default function TabOneScreen() {
         </View>
 
         <FlatList
-          data={cookingVideos}
+          data={LEVELS}
           horizontal
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}
-          renderItem={renderVideoCard}
+          renderItem={renderLevelCard}
           contentContainerStyle={styles.listContainer}
         />
 

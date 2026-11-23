@@ -31,6 +31,11 @@ service cloud.firestore {
         allow read, write: if isUser(uid);
       }
 
+      // Masterclass progress: private to the owner.
+      match /progress/{lessonId} {
+        allow read, write: if isUser(uid);
+      }
+
       // Prep lists: private to the owner.
       match /prepLists/{prepId} {
         allow read, write: if isUser(uid);
@@ -40,11 +45,20 @@ service cloud.firestore {
       // sender's uid. Sender may create; recipient may read and delete.
       match /friendRequests/{fromUid} {
         allow read, delete: if isUser(uid);
+        // The sender can see and withdraw their own request.
+        allow get, delete: if isUser(fromUid);
         allow create: if isUser(fromUid)
           && fromUid != uid
           && request.resource.data.fromUid == fromUid
           && request.resource.data.status == 'pending';
         allow update: if false;
+      }
+
+      // Requests this user has sent (so the app can show "Requested").
+      // The recipient may clear it when they accept or decline.
+      match /sentRequests/{targetUid} {
+        allow read, write: if isUser(uid);
+        allow delete: if isUser(targetUid);
       }
 
       // Friends list. Owner manages their own list. When accepting a request,
