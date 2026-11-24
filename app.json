@@ -14,7 +14,7 @@
       "backgroundColor": "#0f1115"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.blaszen.gastro",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
